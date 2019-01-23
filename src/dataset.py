@@ -1,8 +1,13 @@
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import seaborn as sns
 import statsmodels.api as sm
 import warnings
+
 from sklearn.model_selection import train_test_split
+from scipy.stats import skew, boxcox_normmax
+from scipy.special import boxcox1p
 
 from src.split import Split
 from src.correlations import cramers_v, theils_u
@@ -130,6 +135,24 @@ class Dataset:
         test = fit.outlier_test()['bonf(p)']
         return list(test[test<1e-3].index)
     
+    def skewness(self, threshold=0.75, fix=False, return_series=False):
+        """
+        Returns the list of numerical features that present skewness
+        :return: A pandas Series with the features and their skewness
+        """
+        df = self.select('numerical')
+        feature_skew = df.apply(
+            lambda x: skew(x)).sort_values(ascending=False)
+
+        if fix is True:
+            high_skew = feature_skew[feature_skew > threshold]
+            skew_index = high_skew.index
+            for feature in skew_index:
+                self.features[feature] = boxcox1p(
+                    df[feature], boxcox_normmax(df[feature] + 1))
+        if return_series is True:
+            return feature_skew
+
     def numerical_correlated(self,
                              method='spearman',
                              threshold=0.9):
@@ -179,6 +202,22 @@ class Dataset:
         # Find index of feature columns with correlation greater than threshold
         return [column for column in upper.columns
                    if any(abs(upper[column]) > threshold)], corr
+
+    def under_represented_features(self, threshold=0.98):
+        """
+        Returns the list of categorical features with unrepresented categories
+        or a clear unbalance between the values that can take.
+        :param threshold: The upper limit of the most represented category
+        of the feature.
+        :return: the list of features that with unrepresented categories.
+        """
+        under_rep = []
+        for column in self.meta['categorical']:
+            counts = self.features[column].value_counts()
+            majority_freq = counts.iloc[0]
+            if (majority_freq / len(self.features)) > threshold:
+                under_rep.append(column)
+        return under_rep
 
     def drop_columns(self, columns_list):
         """
@@ -294,3 +333,13 @@ class Dataset:
                 format_str += '{{:<{:d}}}'.format(col_width)
             print(format_str.format(*f_list[from_idx:to_idx]))
         print('-' * ((max_fields * max_length) + (max_fields - 1)))
+
+    def plot_corr_matrix(self, corr_matrix):
+        f, ax = plt.subplots(figsize=(11, 9))
+        # Generate a mask for the upper triangle
+        mask = np.zeros_like(corr_matrix, dtype=np.bool)
+        mask[np.triu_indices_from(mask)] = True
+        cmap = sns.diverging_palette(220, 10, as_cmap=True)
+        sns.heatmap(corr_matrix, mask=mask, cmap=cmap, vmax=0.75, center=0,
+                    square=True, linewidths=.5, cbar_kws={"shrink": .5});
+        plt.show();
