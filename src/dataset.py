@@ -6,6 +6,8 @@ import statsmodels.api as sm
 import warnings
 
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler, PowerTransformer
+from sklearn_pandas import DataFrameMapper
 from scipy.stats import skew, boxcox_normmax
 from scipy.special import boxcox1p
 
@@ -19,6 +21,7 @@ warnings.filterwarnings(action='once')
 # Correlation ideas taken from:
 # https://towardsdatascience.com/the-search-for-categorical-correlation-a1cf7f1888c9
 #
+
 
 class Dataset:
     """
@@ -38,7 +41,6 @@ class Dataset:
     meta_tags = ['all', 'numerical', 'categorical', 'complete',
                  'numerical_na', 'categorical_na', 'features', 'target']
 
-    
     def __init__(self, data_location):
         self.data = pd.read_csv(data_location)
         self.features = self.data
@@ -134,6 +136,50 @@ class Dataset:
         fit = ols.fit()
         test = fit.outlier_test()['bonf(p)']
         return list(test[test<1e-3].index)
+
+    def scale(self, features_of_type='numerical', return_series=False):
+        """
+        Scales numerical features in the dataset, unless the parameter 'what'
+        specifies any other subset selection primitive.
+        :param features_of_type: Subset selection primitive
+        :return: the subset scaled.
+        """
+        assert features_of_type in self.meta_tags
+        subset = self.select(features_of_type)
+        mapper = DataFrameMapper([(subset.columns, StandardScaler())])
+        scaled_features = mapper.fit_transform(subset.copy())
+        self.features[self.names(features_of_type)] = pd.DataFrame(
+            scaled_features,
+            index=subset.index,
+            columns=subset.columns)
+        self.metainfo()
+        if return_series is True:
+            return self.features[self.names(features_of_type)]
+
+    def ensure_normality(self,
+                         features_of_type='numerical',
+                         return_series=False):
+        """
+        Ensures that the numerical features in the dataset, unless the
+        parameter 'what' specifies any other subset selection primitive,
+        fit into a normal distribution by applying the Yeo-Johnson transform
+        :param features_of_type: Subset selection primitive
+        :param return_series: Return the normalized series
+        :return: the subset fitted to normal distribution.
+        """
+        assert features_of_type in self.meta_tags
+        subset = self.select(features_of_type)
+        mapper = DataFrameMapper([(subset.columns, PowerTransformer(
+            method='yeo-johnson',
+            standardize=False))])
+        normed_features = mapper.fit_transform(subset.copy())
+        self.features[self.names(features_of_type)] = pd.DataFrame(
+            normed_features,
+            index=subset.index,
+            columns=subset.columns)
+        self.metainfo()
+        if return_series is True:
+            return self.features[self.names(features_of_type)]
     
     def skewness(self, threshold=0.75, fix=False, return_series=False):
         """
@@ -176,7 +222,7 @@ class Dataset:
         return [column for column in upper.columns
                    if any(abs(upper[column]) > threshold)], corr_matrix
 
-    def categorical_correlation(self, threshold=0.9):
+    def categorical_correlated(self, threshold=0.9):
         """
         Generates a correlation matrix for the categorical variables in dataset
         :param method: 'cramers_v' or 'theils_u'
