@@ -6,7 +6,8 @@ import statsmodels.api as sm
 import warnings
 
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler, PowerTransformer
+from sklearn.preprocessing import StandardScaler, PowerTransformer, \
+    OneHotEncoder
 from sklearn_pandas import DataFrameMapper
 from scipy.stats import skew, boxcox_normmax
 from scipy.special import boxcox1p
@@ -181,6 +182,22 @@ class Dataset:
         if return_series is True:
             return self.features[self.names(features_of_type)]
     
+    def onehot_encode(self):
+        """
+        Encodes the categorical features in the dataset, with OneHotEncode
+        """
+        new_df = self.features[self.names('numerical')].copy()
+        for categorical_column in self.names('categorical'):
+            new_df = pd.concat(
+                [new_df,
+                 pd.get_dummies(
+                     self.features[categorical_column],
+                     prefix=categorical_column)
+                 ],
+                axis=1)
+        self.features = new_df.copy()
+        self.metainfo()
+
     def skewness(self, threshold=0.75, fix=False, return_series=False):
         """
         Returns the list of numerical features that present skewness
@@ -309,8 +326,8 @@ class Dataset:
         """
         assert self.target is not None
         
-        X = pd.DataFrame(self.data, columns=self.features)
-        Y = pd.DataFrame(self.select('target'))
+        X = pd.DataFrame(self.features, columns=self.names('features'))
+        Y = pd.DataFrame(self.target)
 
         X_train, X_test, Y_train, Y_test = train_test_split(
             X, Y, 
