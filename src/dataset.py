@@ -42,10 +42,21 @@ class Dataset:
     meta_tags = ['all', 'numerical', 'categorical', 'complete',
                  'numerical_na', 'categorical_na', 'features', 'target']
 
-    def __init__(self, data_location):
-        self.data = pd.read_csv(data_location)
+    def __init__(self, data_location=None, data_frame=None):
+        if data_location is not None:
+            self.data = pd.read_csv(data_location)
+        else:
+            if data_frame is not None:
+                self.data = data_frame
+            else:
+                raise RuntimeError(
+                    "No data location, nor DataFrame passed to constructor")
         self.features = self.data
         self.metainfo()
+
+    @classmethod
+    def from_dataframe(cls, df):
+        return cls(data_location=None, data_frame=df)
         
     def set_target(self, target_name):
         """
@@ -60,7 +71,7 @@ class Dataset:
         """
         if target_name in list(self.features):
             self.target = self.features.loc[:, target_name].copy()
-            self.features.drop(self.target.name, axis=1, inplace=True)
+            self.features.drop(target_name, axis=1, inplace=True)
         else:
             self.target = self.data.loc[:, target_name].copy()
         self.metainfo()
@@ -116,7 +127,7 @@ class Dataset:
             assert which in self.meta_tags
             return self.data.loc[:, self.meta[which]]
     
-    def names(self, which):
+    def names(self, which='all'):
         """
         Returns a the names of the columns of the dataset for which the arg
         `which` is specified.
@@ -281,6 +292,18 @@ class Dataset:
             if (majority_freq / len(self.features)) > threshold:
                 under_rep.append(column)
         return under_rep
+
+    def add_column(self, serie):
+        """
+        Add a Series as a new column to the dataset.
+        Example:
+
+            my_data.add_column(serie)
+            my_data.add_column(name=pandas.Series().values)
+        """
+        if serie.name not in self.names('features'):
+            self.features[serie.name] = serie.values
+            self.metainfo()
 
     def drop_columns(self, columns_list):
         """
