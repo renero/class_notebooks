@@ -12,11 +12,11 @@ from sklearn_pandas import DataFrameMapper
 from scipy.stats import skew, boxcox_normmax
 from scipy.special import boxcox1p
 
-from src.split import Split
-from src.correlations import cramers_v, theils_u
+from dataset.split import Split
+from dataset.correlations import cramers_v
 
 
-warnings.filterwarnings(action='once')
+warnings.simplefilter(action='ignore')
 
 #
 # Correlation ideas taken from:
@@ -111,34 +111,6 @@ class Dataset:
         self.meta = meta
         return self
     
-    def select(self, which):
-        """
-        Returns a subset of the columns of the dataset.
-        `which` specifies which subset of features to return
-        If it is a list, it returns those feature names in the list,
-        And if it is a keywork from: 'all', 'categorical', 'categorical_na',
-        'numerical', 'numerical_na', 'complete', 'features', 'target',
-        then the list of features is extracted from the metainformation 
-        of the dataset.
-        """
-        if isinstance(which, list):
-            return self.data.loc[:, which]
-        else:
-            assert which in self.meta_tags
-            return self.data.loc[:, self.meta[which]]
-    
-    def names(self, which='all'):
-        """
-        Returns a the names of the columns of the dataset for which the arg
-        `which` is specified.
-        If it is a list, it returns those feature names in the list,
-        And if it is a keywork from: 'all', 'categorical', 'categorical_na',
-        'numerical', 'numerical_na', 'complete', then the list of 
-        features is extracted from the metainformation of the dataset.
-        """
-        assert which in self.meta_tags
-        return self.meta[which]
-
     def outliers(self):
         """
         Find outliers, using bonferroni criteria, from the numerical features.
@@ -193,22 +165,6 @@ class Dataset:
         if return_series is True:
             return self.features[self.names(features_of_type)]
     
-    def onehot_encode(self):
-        """
-        Encodes the categorical features in the dataset, with OneHotEncode
-        """
-        new_df = self.features[self.names('numerical')].copy()
-        for categorical_column in self.names('categorical'):
-            new_df = pd.concat(
-                [new_df,
-                 pd.get_dummies(
-                     self.features[categorical_column],
-                     prefix=categorical_column)
-                 ],
-                axis=1)
-        self.features = new_df.copy()
-        self.metainfo()
-
     def skewness(self, threshold=0.75, fix=False, return_series=False):
         """
         Returns the list of numerical features that present skewness
@@ -227,8 +183,38 @@ class Dataset:
         if return_series is True:
             return feature_skew
 
+    def onehot_encode(self):
+        """
+        Encodes the categorical features in the dataset, with OneHotEncode
+        """
+        new_df = self.features[self.names('numerical')].copy()
+        for categorical_column in self.names('categorical'):
+            new_df = pd.concat(
+                [new_df,
+                 pd.get_dummies(
+                     self.features[categorical_column],
+                     prefix=categorical_column)
+                 ],
+                axis=1)
+        self.features = new_df.copy()
+        self.metainfo()
+
+    def correlated(self, threshold=0.9):
+        """
+        Return the features that are highly correlated to with other
+        variables, either numerical or categorical, based on the threshold. For
+        numerical variables Spearman correlation is used, for categorical
+        cramers_v
+        :param threshold: correlation limit above which features are considered
+                          highly correlated.
+        :return: the list of features that are highly correlated, and should be
+                 safe to remove.
+        """
+        corr_categoricals, _ = self.categorical_correlated(threshold)
+        corr_numericals, _ = self.numerical_correlated(threshold)
+        return corr_categoricals + corr_numericals
+
     def numerical_correlated(self,
-                             method='spearman',
                              threshold=0.9):
         """
         Build a correlation matrix between all the features in data set
@@ -242,7 +228,7 @@ class Dataset:
         droped out from dataset.
         """
         corr_matrix = np.absolute(
-            self.select('numerical').corr(method=method)).abs()
+            self.select('numerical').corr(method='spearman')).abs()
         # Select upper triangle of correlation matrix
         upper = corr_matrix.where(
             np.triu(np.ones(corr_matrix.shape), k=1).astype(np.bool))
@@ -253,7 +239,6 @@ class Dataset:
     def categorical_correlated(self, threshold=0.9):
         """
         Generates a correlation matrix for the categorical variables in dataset
-        :param method: 'cramers_v' or 'theils_u'
         :param threshold: Limit from which correlations is considered high.
         :return: the list of categorical variables with HIGH correlation and
         the correlation matrix
@@ -293,6 +278,100 @@ class Dataset:
                 under_rep.append(column)
         return under_rep
 
+    def stepwise_selection(self,
+                           initial_list=None,
+                           threshold_in=0.01,
+                           threshold_out=0.05,
+                           verbose=True):
+        """
+        Perform a forward-backward feature selection based on p-value from
+        statsmodels.api.OLS
+        Your features must be all numerical, so be sure to onehot_encode them
+        before calling this method.
+        Always set threshold_in < threshold_out to avoid infinite looping.
+
+        Arguments:
+            initial_list - list of features to start with (column names of X)
+            threshold_in - include a feature if its p-value < threshold_in
+            threshold_out - exclude a feature if its p-value > threshold_out
+            verbose - whether to print the sequence of inclusions and exclusions
+
+        Returns: list of selected features
+
+        See https://en.wikipedia.org/wiki/Stepwise_regression for the details
+        Taken from: https://datascience.stackexchange.com/a/24823
+        """
+        if initial_list is None:
+            initial_list = []
+        assert len(self.names('categorical')) == 0
+        included = list(initial_list)
+        while True:
+            changed = False
+            # forward step
+            excluded = list(set(self.features.columns) - set(included))
+            new_pval = pd.Series(index=excluded)
+            for new_column in excluded:
+                model = sm.OLS(self.target, sm.add_constant(
+                    pd.DataFrame(self.features[included + [new_column]]))).fit()
+                new_pval[new_column] = model.pvalues[new_column]
+            best_pval = new_pval.min()
+            if best_pval < threshold_in:
+                best_feature = new_pval.idxmin()
+                included.append(best_feature)
+                changed = True
+                if verbose:
+                    print('Add  {:30} with p-value {:.6}'.format(best_feature,
+                                                                 best_pval))
+            # backward step
+            model = sm.OLS(self.target, sm.add_constant(
+                pd.DataFrame(self.features[included]))).fit()
+            # use all coefs except intercept
+            pvalues = model.pvalues.iloc[1:]
+            worst_pval = pvalues.max()  # null if p-values is empty
+            if worst_pval > threshold_out:
+                changed = True
+                worst_feature = pvalues.argmax()
+                included.remove(worst_feature)
+                if verbose:
+                    print('Drop {:30} with p-value {:.6}'.format(worst_feature,
+                                                                 worst_pval))
+            if not changed:
+                break
+        return included
+
+    #
+    # From this point, the methods are related to data manipulation of the
+    # pandas dataframe.
+    #
+
+    def select(self, which):
+        """
+        Returns a subset of the columns of the dataset.
+        `which` specifies which subset of features to return
+        If it is a list, it returns those feature names in the list,
+        And if it is a keywork from: 'all', 'categorical', 'categorical_na',
+        'numerical', 'numerical_na', 'complete', 'features', 'target',
+        then the list of features is extracted from the metainformation
+        of the dataset.
+        """
+        if isinstance(which, list):
+            return self.data.loc[:, which]
+        else:
+            assert which in self.meta_tags
+            return self.data.loc[:, self.meta[which]]
+
+    def names(self, which='all'):
+        """
+        Returns a the names of the columns of the dataset for which the arg
+        `which` is specified.
+        If it is a list, it returns those feature names in the list,
+        And if it is a keywork from: 'all', 'categorical', 'categorical_na',
+        'numerical', 'numerical_na', 'complete', then the list of
+        features is extracted from the metainformation of the dataset.
+        """
+        assert which in self.meta_tags
+        return self.meta[which]
+
     def add_column(self, serie):
         """
         Add a Series as a new column to the dataset.
@@ -319,7 +398,20 @@ class Dataset:
             if column in self.names('features'):
                 self.features.drop(column, axis=1, inplace=True)
         self.metainfo()
-    
+
+    def keep_columns(self, to_keep):
+        """
+        Keep only one or a list of columns from the dataset.
+        Example:
+
+            my_data.keep_columns('column_name')
+            my_data.keep_columns(['column1', 'column2', 'column3'])
+        """
+        if isinstance(to_keep, list) is not True:
+            to_keep = [to_keep]
+        to_drop = list(set(list(self.features)) - set(to_keep))
+        self.drop_columns(to_drop)
+
     def drop_samples(self, index_list):
         """
         Remove the list of samples from the dataset. 
@@ -392,7 +484,7 @@ class Dataset:
         print('Target: {}'.format(
             self.meta['target'] if self.target is not None else 'Not set'))
 
-    def table(self, which=all, max_width=80):
+    def table(self, which='all', max_width=80):
         """
         Print a tabulated version of the list of elements in a list, using
         a max_width display (default 80).
@@ -421,7 +513,7 @@ class Dataset:
         print('-' * ((max_fields * max_length) + (max_fields - 1)))
 
     def plot_corr_matrix(self, corr_matrix):
-        f, ax = plt.subplots(figsize=(11, 9))
+        plt.subplots(figsize=(11, 9))
         # Generate a mask for the upper triangle
         mask = np.zeros_like(corr_matrix, dtype=np.bool)
         mask[np.triu_indices_from(mask)] = True

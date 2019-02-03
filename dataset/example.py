@@ -1,16 +1,11 @@
-# import nbimporter
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
 import warnings
 
 warnings.filterwarnings('ignore')
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
-from src.dataset import Dataset
-from dython.nominal import associations
+from dataset import Dataset
 
-houses = Dataset('./data/houseprices_prepared.csv.gz')
+houses = Dataset('../data/houseprices_prepared.csv.gz')
 houses.describe()
 
 houses.replace_na(column='Electrical', value='Unknown')
