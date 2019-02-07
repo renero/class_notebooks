@@ -139,6 +139,8 @@ class Dataset:
         self.metainfo()
         if return_series is True:
             return self.features[self.names(features_of_type)]
+        else:
+            return self
 
     def ensure_normality(self,
                          features_of_type='numerical',
@@ -198,6 +200,7 @@ class Dataset:
                 axis=1)
         self.features = new_df.copy()
         self.metainfo()
+        return self
 
     def correlated(self, threshold=0.9):
         """
@@ -383,6 +386,7 @@ class Dataset:
         if serie.name not in self.names('features'):
             self.features[serie.name] = serie.values
             self.metainfo()
+        return self
 
     def drop_columns(self, columns_list):
         """
@@ -398,6 +402,7 @@ class Dataset:
             if column in self.names('features'):
                 self.features.drop(column, axis=1, inplace=True)
         self.metainfo()
+        return self
 
     def keep_columns(self, to_keep):
         """
@@ -411,6 +416,45 @@ class Dataset:
             to_keep = [to_keep]
         to_drop = list(set(list(self.features)) - set(to_keep))
         self.drop_columns(to_drop)
+        return self
+
+    def aggregate(self,
+                  col_list,
+                  new_column,
+                  operation='sum',
+                  drop_columns=True):
+        """
+        Perform an arithmetic operation on the given columns, and places the
+        result on a new column, removing the original ones.
+
+        Example: if we want to sum the values of column1 and column2 into a
+        new column called 'column3', we use:
+
+            my_data.aggregate(['column1', 'column2'], 'column3')
+
+        As a result, 'my_data' will remove 'column1' and 'column2', and the
+        operation will be the sum of the values, as it is the default operation.
+
+        :param col_list: the list of columns over which the operation is done
+        :param new_column: the name of the new column to be generated from the
+        operation
+        :param drop_columns: whether remove the columns used to perfrom the
+        aggregation
+        :param operation: the operation to be done over the column values for
+        each row. Examples: 'sum', 'diff', 'max', etc. By default, the operation
+        is the sum of the values.
+        :return: the Dataset object
+        """
+        assert operation in dir(type(self.features))
+        for col_name in col_list:
+            assert col_name in list(self.features)
+        self.features[new_column] = getattr(
+            self.features[col_list],
+            operation)(axis=1)
+        if drop_columns is True:
+            self.drop_columns(col_list)
+        self.metainfo()
+        return self
 
     def drop_samples(self, index_list):
         """
@@ -418,6 +462,7 @@ class Dataset:
         """
         self.data.drop(self.data.index[index_list])
         self.metainfo()
+        return self
         
     def replace_na(self, column, value):
         """
@@ -430,6 +475,7 @@ class Dataset:
         else:
             self.data[column].fillna(value, inplace=True)
         self.metainfo()
+        return self
         
     def split(self,
               seed=1024, 
