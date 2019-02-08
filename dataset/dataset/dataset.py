@@ -42,16 +42,25 @@ class Dataset:
     meta_tags = ['all', 'numerical', 'categorical', 'complete',
                  'numerical_na', 'categorical_na', 'features', 'target']
 
-    def __init__(self, data_location=None, data_frame=None):
+    def __init__(self, data_location=None, data_frame=None, *args, **kwargs):
+        """
+        Wrapper over the method read_csv from pandas, so you can user variadic
+        arguments, as if you were using the actual read_csv
+        :param data_location: path or url to the file
+        :param data_frame: in case this method is called from the class method
+        this parameter is passing the actual dataframe to read data from
+        :param args: variadic unnamed arguments to pass to read_csv
+        :param kwargs: variadic named arguments to pass to read_csv
+        """
         if data_location is not None:
-            self.data = pd.read_csv(data_location)
+            self.data = pd.read_csv(data_location, *args, **kwargs)
         else:
             if data_frame is not None:
                 self.data = data_frame
             else:
                 raise RuntimeError(
                     "No data location, nor DataFrame passed to constructor")
-        self.features = self.data
+        self.features = self.data.copy()
         self.metainfo()
 
     @classmethod
@@ -75,6 +84,7 @@ class Dataset:
         else:
             self.target = self.data.loc[:, target_name].copy()
         self.metainfo()
+        return self
         
     def metainfo(self):
         """
