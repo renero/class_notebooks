@@ -368,10 +368,10 @@ class Dataset:
         of the dataset.
         """
         if isinstance(which, list):
-            return self.data.loc[:, which]
+            return self.features.loc[:, which]
         else:
             assert which in self.meta_tags
-            return self.data.loc[:, self.meta[which]]
+            return self.features.loc[:, self.meta[which]]
 
     def names(self, which='all'):
         """
@@ -463,7 +463,8 @@ class Dataset:
             operation)(axis=1)
         if drop_columns is True:
             self.drop_columns(col_list)
-        self.metainfo()
+        else:
+            self.metainfo()
         return self
 
     def drop_samples(self, index_list):

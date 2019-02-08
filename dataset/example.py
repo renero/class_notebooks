@@ -15,3 +15,14 @@ houses.describe()
 
 houses.drop_columns('Id')
 houses.describe()
+
+houses.aggregate(['1stFlrSF','2ndFlrSF','BsmtFinSF1','BsmtFinSF2'], 'HouseSF')
+houses.describe()
+
+houses.aggregate(['OpenPorchSF','3SsnPorch','EnclosedPorch','ScreenPorch',
+                  'WoodDeckSF'], 'HousePorch')
+houses.describe()
+
+houses.aggregate(['FullBath', 'BsmtFullBath', 'HalfBath', 'BsmtHalfBath'],
+                 'HouseBaths')
+houses.describe()
