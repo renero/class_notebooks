@@ -1,4 +1,4 @@
-# Machine Learning II Notebooks
+# Machine Learning Notebooks
 
 This repo keeps the notebooks used in Machine Learning sessions.
 
