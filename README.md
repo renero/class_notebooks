@@ -1,6 +1,6 @@
-# Machine Learning II Notebooks
+# Machine Learning Notebooks
 
-This repo holds some of the notebooks used in machine learning II sessions @ IE.
+This repo keeps the notebooks used in Machine Learning sessions.
 
 To work will all dependencies:
 
@@ -8,4 +8,7 @@ To work will all dependencies:
     cd class_notebooks
     pip install -r requirements.txt
 
-The class `Dataset` still needs more documentation, but feel free to contribute and experiment with it via pull request.
+The class `Dataset` still needs more documentation, but feel free to contribute and experiment with it via pull request. If you want to use it, I recommend to install via pip with a link to the source, in case you want to update or pull it regularly:
+
+    $ cd dataset
+    $ pip install -e .
