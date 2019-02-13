@@ -85,9 +85,6 @@ class Dataset:
             self.target = self.data.loc[:, target_name].copy()
         self.metainfo()
         return self
-        
-    def test():
-        return "test"
 
     def metainfo(self):
         """
