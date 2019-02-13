@@ -152,7 +152,7 @@ class Dataset:
         else:
             return self
 
-    def ensure_normality(self,
+    def fix_skewness(self,
                          features_of_type='numerical',
                          return_series=False):
         """
@@ -177,7 +177,7 @@ class Dataset:
         if return_series is True:
             return self.features[self.names(features_of_type)]
     
-    def skewness(self, threshold=0.75, fix=False, return_series=False):
+    def skewed_features(self, threshold=0.75, fix=False, return_series=False):
         """
         Returns the list of numerical features that present skewness
         :return: A pandas Series with the features and their skewness
@@ -539,31 +539,109 @@ class Dataset:
             len(self.meta['complete'])))
         print('--')
         if self.target is not None:
-            print('Target: {}'.format(self.meta['target']))
+            print('Target: {} ({})'.format(
+                self.meta['target'], self.target.dtype.name))
             if self.target.dtype.name == 'object':
-                self.describe_categorical()
+                self.describe_categorical(self.target)
             else:
-                self.describe_numerical()
+                self.describe_numerical(self.target)
         else:
             print('Target: Not set')
 
-    def describe_categorical(self):
-        num_categories = self.target.nunique()
-        cat_counts = self.target.value_counts().values
+    def describe_categorical(self, feature, inline=False):
+        """
+        Describe a categorical column by printing num classes and proportion
+        :return: nothing
+        """
+        num_categories = feature.nunique()
+        cat_names = feature.unique()
+        cat_counts = feature.value_counts().values
         cat_proportion = [count / cat_counts.sum()
                           for count in cat_counts]
-        print('  {} categories'.format(num_categories))
-        for cat in range(len(cat_proportion)):
-            print('  - \'{}\' {:.04}'.format(
-                cat_counts[cat], cat_proportion[cat]))
+        if inline is False:
+            print('  {} categories'.format(num_categories))
+            for cat in range(len(cat_proportion)):
+                print('  - \'{}\': {} ({:.04})'.format(
+                    cat_names[cat], cat_counts[cat], cat_proportion[cat]))
+        else:
+            if num_categories <= 5:
+                max_categories = num_categories
+                trail = ''
+            else:
+                max_categories = 5
+                trail = '...'
+            header = '{:d} categs. '.format(num_categories)
+            body = '\'{}\'({:d}, {:.4f}) ' * max_categories
+            values = [(cat_names[cat], cat_counts[cat], cat_proportion[cat])
+                for cat in range(max_categories)]
+            values_flattened = list(sum(values, ()))
+            body_formatted = body.format(*values_flattened)
+            return header + body_formatted + trail
 
-    def describe_numerical(self):
-        print('  Min.  : {:.04f}'.format(np.min(self.target)))
-        print('  1st Q.: {:.04f}'.format(np.percentile(self.target, 25)))
-        print('  Median: {:.04f}'.format(np.median(self.target)))
-        print('  Mean  : {:.04f}'.format(np.mean(self.target)))
-        print('  3rd Q.: {:.04f}'.format(np.percentile(self.target, 75)))
-        print('  Max.  : {:.04f}'.format(np.max(self.target)))
+
+    def numerical_description(self, feature):
+        """
+        Build a dictionary with the main numerical descriptors for a feature.
+        :param feature: The feature (column) to be analyzed
+        :return: a dictionary with the indicators and its values.
+        """
+        description = dict()
+        description['Min.'] = np.min(feature)
+        description['1stQ'] = np.percentile(feature, 25)
+        description['Med.'] = np.median(feature)
+        description['Mean'] = np.mean(feature)
+        description['3rdQ'] = np.percentile(feature, 75)
+        description['Max.'] = np.max(feature)
+        return description
+
+    def describe_numerical(self, feature, inline=False):
+        """
+        Describe a numerical column by printing min, max, med, mean, 1Q, 3Q
+        :return: nothing
+        """
+        description = self.numerical_description(feature)
+        if inline is False:
+            for k, v in description.items():
+                print('  {:<6s}: {:.04f}'.format(k, v))
+        else:
+            body = ('{}({:<}) ' * len(description))[:-1]
+            # arguments = list(map(str, list(description.values())))
+            values = [(k, str(description[k])) for k in description]
+            values_flattened = list(sum(values, ()))
+            body_formatted = body.format(*values_flattened)
+            return body_formatted
+
+    def describe_feature(self, feature, inline=False):
+        """
+        Calls the proper feature description method, depending on whether the
+        feature is numerical or categorical
+        :param feature: the feature
+        :param inline: whether the output is multiple lines or inline.
+        :return: the string, only when inline=True
+        """
+        if feature.dtype.name in ['bool', 'object', 'string']:
+            return self.describe_categorical(feature, inline)
+        else:
+            return self.describe_numerical(feature, inline)
+
+    def summary(self):
+        """
+        Printout a summary of each feature.
+        :return:
+        """
+        max_width = 25
+        max_len_in_list = np.max([len(s) for s in list(self.features)]) + 2
+        if max_len_in_list > max_width:
+            max_width = max_len_in_list
+        else:
+            max_width = max_len_in_list
+        formatting = '{{:<{}s}}: {{:<10s}} {{}}'.format(max_width)
+        print('\nFeatures Summary:')
+        for feature in list(self.features):
+            feature_formatted = '\'' + feature + '\''
+            print(formatting.format(
+                feature_formatted, self.features[feature].dtype.name,
+                self.describe_feature(self.features[feature], inline=True)))
 
     def table(self, which='all', max_width=80):
         """
