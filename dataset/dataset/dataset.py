@@ -538,8 +538,19 @@ class Dataset:
         print('{} Complete features'.format(
             len(self.meta['complete'])))
         print('--')
-        print('Target: {}'.format(
-            self.meta['target'] if self.target is not None else 'Not set'))
+        if self.target is not None:
+            print('Target: {}'.format(self.meta['target']))
+            if self.target.dtype.name == 'object':
+                num_categories = self.target.nunique()
+                cat_counts = self.target.value_counts().values
+                cat_proportion = [count / cat_counts.sum()
+                                  for count in cat_counts]
+                print('  {} categories'.format(num_categories))
+                for cat in range(len(cat_proportion)):
+                    print('  - \'{}\' {:.04}'.format(
+                        cat_counts[cat], cat_proportion[cat]))
+        else:
+            print('Target: Not set')
 
     def table(self, which='all', max_width=80):
         """

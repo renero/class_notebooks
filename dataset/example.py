@@ -1,9 +1,10 @@
 import warnings
 
 warnings.filterwarnings('ignore')
-warnings.simplefilter(action='ignore', category=FutureWarning)
 
+import pandas as pd
 from dataset import Dataset
+
 
 houses = Dataset('../data/houseprices_prepared.csv.gz')
 houses.describe()
@@ -26,3 +27,13 @@ houses.describe()
 houses.aggregate(['FullBath', 'BsmtFullBath', 'HalfBath', 'BsmtHalfBath'],
                  'HouseBaths')
 houses.describe()
+
+
+
+
+
+d = {'col1': [1, 2, 3], 'col2': ['a', 'a', 'b']}
+df = pd.DataFrame(data=d)
+ds = Dataset.from_dataframe(df)
+ds.set_target('col2')
+ds.describe()
