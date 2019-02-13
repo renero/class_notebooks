@@ -86,6 +86,9 @@ class Dataset:
         self.metainfo()
         return self
         
+    def test():
+        return "test"
+
     def metainfo(self):
         """
         Builds metainfromation about the dataset, considering the 
@@ -578,3 +581,45 @@ class Dataset:
         sns.heatmap(corr_matrix, mask=mask, cmap=cmap, vmax=0.75, center=0,
                     square=True, linewidths=.5, cbar_kws={"shrink": .5});
         plt.show();
+
+    def plot_against_target(self, columns_list, bins=50):
+        """
+        Plots a histogram of all (or a specific) feature
+        Example:
+            my_data.drop_columns('column_name')
+            my_data.drop_columns(['column1', 'column2', 'column3'])
+        :param which: feature to plot
+        :return: A plot of the feature histogram
+        """
+        assert self.names('target') is not None, "Please set the target variable first"
+        target_name = self.names('target')
+
+        if isinstance(columns_list, list) is not True:
+            columns_list = [columns_list]
+
+        plt.rcParams["figure.figsize"] = (15,15)
+
+
+        for i, column in enumerate(columns_list):
+            if column in self.names('features') and column in self.names('numerical'):
+                # Prepare series
+                data = self.select([column, target_name]).copy()
+                data = pd.concat([self.select([column]), self.target], axis=1)
+                x = data.loc[data[target_name]==0][column]
+                y = data.loc[data[target_name]==1][column]
+
+                # calculate number of bins
+                unique = len(np.unique(data))
+                number_of_bins = unique if unique <= bins else bins
+
+                # Plot arrangment
+                plt.subplot(len(columns_list), 1,i+1)
+                
+                # Plot
+                plt.hist([x,y], bins=number_of_bins, stacked=True)
+                
+                # Add labels
+                plt.title('Histogram of ' + column)
+                plt.legend([target_name+': 0', target_name+': 1'])
+                plt.xlabel(column)
+                plt.ylabel('count')
