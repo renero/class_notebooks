@@ -85,7 +85,7 @@ class Dataset:
             self.target = self.data.loc[:, target_name].copy()
         self.metainfo()
         return self
-
+        
     def metainfo(self):
         """
         Builds metainfromation about the dataset, considering the 
@@ -581,10 +581,10 @@ class Dataset:
 
     def plot_against_target(self, columns_list, bins=50):
         """
-        Plots a histogram of all (or a specific) feature
+        Plots a histogram of all (or a specific) feature along with target variable (stacked bar chart)
         Example:
-            my_data.drop_columns('column_name')
-            my_data.drop_columns(['column1', 'column2', 'column3'])
+            my_data.plot_against_target('column_name')
+            my_data.plot_against_target(['column1', 'column2', 'column3'])
         :param which: feature to plot
         :return: A plot of the feature histogram
         """
@@ -611,10 +611,10 @@ class Dataset:
 
                 # Plot arrangment
                 plt.subplot(len(columns_list), 1,i+1)
-                
+
                 # Plot
                 plt.hist([x,y], bins=number_of_bins, stacked=True)
-                
+
                 # Add labels
                 plt.title('Histogram of ' + column)
                 plt.legend([target_name+': 0', target_name+': 1'])
