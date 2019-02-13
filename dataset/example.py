@@ -28,12 +28,12 @@ houses.aggregate(['FullBath', 'BsmtFullBath', 'HalfBath', 'BsmtHalfBath'],
                  'HouseBaths')
 houses.describe()
 
-
-
-
-
+#
+# Categorical examples
+#
 d = {'col1': [1, 2, 3], 'col2': ['a', 'a', 'b']}
 df = pd.DataFrame(data=d)
 ds = Dataset.from_dataframe(df)
 ds.set_target('col2')
 ds.describe()
+print(list(ds.select('numerical')))

@@ -541,16 +541,29 @@ class Dataset:
         if self.target is not None:
             print('Target: {}'.format(self.meta['target']))
             if self.target.dtype.name == 'object':
-                num_categories = self.target.nunique()
-                cat_counts = self.target.value_counts().values
-                cat_proportion = [count / cat_counts.sum()
-                                  for count in cat_counts]
-                print('  {} categories'.format(num_categories))
-                for cat in range(len(cat_proportion)):
-                    print('  - \'{}\' {:.04}'.format(
-                        cat_counts[cat], cat_proportion[cat]))
+                self.describe_categorical()
+            else:
+                self.describe_numerical()
         else:
             print('Target: Not set')
+
+    def describe_categorical(self):
+        num_categories = self.target.nunique()
+        cat_counts = self.target.value_counts().values
+        cat_proportion = [count / cat_counts.sum()
+                          for count in cat_counts]
+        print('  {} categories'.format(num_categories))
+        for cat in range(len(cat_proportion)):
+            print('  - \'{}\' {:.04}'.format(
+                cat_counts[cat], cat_proportion[cat]))
+
+    def describe_numerical(self):
+        print('  Min.  : {:.04f}'.format(np.min(self.target)))
+        print('  1st Q.: {:.04f}'.format(np.percentile(self.target, 25)))
+        print('  Median: {:.04f}'.format(np.median(self.target)))
+        print('  Mean  : {:.04f}'.format(np.mean(self.target)))
+        print('  3rd Q.: {:.04f}'.format(np.percentile(self.target, 75)))
+        print('  Max.  : {:.04f}'.format(np.max(self.target)))
 
     def table(self, which='all', max_width=80):
         """
