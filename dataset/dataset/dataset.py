@@ -627,7 +627,7 @@ class Dataset:
     def summary(self):
         """
         Printout a summary of each feature.
-        :return:
+        :return: N/A
         """
         max_width = 25
         max_len_in_list = np.max([len(s) for s in list(self.features)]) + 2
