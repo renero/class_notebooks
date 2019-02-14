@@ -371,6 +371,21 @@ class Dataset:
     def onehot_encode(self, to_convert=None):
         """
         Encodes the categorical features in the dataset, with OneHotEncode
+
+        :parameter to_convert: column or list of columns to be one-hot encoded.
+        The only restriction is that the target variable cannot be specified
+        in the list of columns and therefore, cannot be onehot encoded.
+
+        Example:
+            # Encodes a single column named 'my_column_name'
+            my_data.onehot_encode('my_column_name')
+
+            # Encodes 'col1' and 'col2'
+            my_data.onehot_encode(['col1', 'col2'])
+
+            # Encodes all categorical features in the dataset
+            my_data.onehot_encode(my_data.names('categorical'))
+
         """
         assert to_convert is not None
         if isinstance(to_convert, list) is not True:
@@ -411,6 +426,7 @@ class Dataset:
         
             my_data.drop_columns('column_name')
             my_data.drop_columns(['column1', 'column2', 'column3'])
+
         """
         if isinstance(columns_list, list) is not True:
             columns_list = [columns_list]
@@ -679,7 +695,6 @@ class Dataset:
             return
         else:
             body = ('{}({:<}) ' * len(description))[:-1]
-            # arguments = list(map(str, list(description.values())))
             values = [(k, str(description[k])) for k in description]
             values_flattened = list(sum(values, ()))
             body_formatted = body.format(*values_flattened)
