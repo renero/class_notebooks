@@ -41,6 +41,7 @@ class Dataset:
 
     meta_tags = ['all', 'numerical', 'categorical', 'complete',
                  'numerical_na', 'categorical_na', 'features', 'target']
+    categorical_dtypes = ['bool', 'object', 'string']
 
     def __init__(self, data_location=None, data_frame=None, *args, **kwargs):
         """
@@ -195,23 +196,6 @@ class Dataset:
         if return_series is True:
             return feature_skew
 
-    def onehot_encode(self):
-        """
-        Encodes the categorical features in the dataset, with OneHotEncode
-        """
-        new_df = self.features[self.names('numerical')].copy()
-        for categorical_column in self.names('categorical'):
-            new_df = pd.concat(
-                [new_df,
-                 pd.get_dummies(
-                     self.features[categorical_column],
-                     prefix=categorical_column)
-                 ],
-                axis=1)
-        self.features = new_df.copy()
-        self.metainfo()
-        return self
-
     def correlated(self, threshold=0.9):
         """
         Return the features that are highly correlated to with other
@@ -353,8 +337,7 @@ class Dataset:
         return included
 
     #
-    # From this point, the methods are related to data manipulation of the
-    # pandas dataframe.
+    # Methods are related to data manipulation of the pandas dataframe.
     #
 
     def select(self, which):
@@ -384,6 +367,29 @@ class Dataset:
         """
         assert which in self.meta_tags
         return self.meta[which]
+
+    def onehot_encode(self, to_convert=None):
+        """
+        Encodes the categorical features in the dataset, with OneHotEncode
+        """
+        assert to_convert is not None
+        if isinstance(to_convert, list) is not True:
+            to_convert = [to_convert]
+
+        new_df = self.features[
+            self.features.columns.difference(to_convert)].copy()
+        for column_to_convert in to_convert:
+            new_df = pd.concat(
+                [new_df,
+                 pd.get_dummies(
+                     self.features[column_to_convert],
+                     prefix=column_to_convert,
+                     dtype=bool)
+                 ],
+                axis=1)
+        self.features = new_df.copy()
+        self.metainfo()
+        return self
 
     def add_column(self, serie):
         """
@@ -475,16 +481,40 @@ class Dataset:
         self.metainfo()
         return self
         
+    def nas(self):
+        """
+        Returns the list of features that present NA entries
+        :return: the list of feature names presenting NA
+        """
+        return self.names('numerical_na') + self.names('categorical_na')
+
     def replace_na(self, column, value):
         """
-        Replace any NA occurrence from the column or list of columns passed 
+        Replace any NA occurrence from the column or list of columns passed
         by the value passed as second argument.
+        :param column: Column name or list of column names from which to
+        replace NAs with the value passes in the second argument
+        :param value: value to be used as replacement
+        :return: the object.
         """
         if isinstance(column, list) is True:
             for col in column:
                 self.data[col].fillna(value, inplace=True)
         else:
             self.data[column].fillna(value, inplace=True)
+        self.metainfo()
+        return self
+
+    def drop_na(self):
+        """
+        Drop samples with NAs from the column or list of columns passed
+        in second argument.
+
+        :param column: column name or list of columns from which to remove
+        NA entries
+        :return: object
+        """
+        self.features.dropna()
         self.metainfo()
         return self
         
@@ -498,26 +528,66 @@ class Dataset:
         """
         assert self.target is not None
         
-        X = pd.DataFrame(self.features, columns=self.names('features'))
-        Y = pd.DataFrame(self.target)
+        x = pd.DataFrame(self.features, columns=self.names('features'))
+        y = pd.DataFrame(self.target)
 
-        X_train, X_test, Y_train, Y_test = train_test_split(
-            X, Y, 
+        x_train, x_test, y_train, y_test = train_test_split(
+            x, y,
             test_size=test_size, random_state=seed)
 
         if validation_split is True:
-            X_train, X_val, Y_train, Y_val = train_test_split(
-                X_train, Y_train, 
+            x_train, x_val, y_train, y_val = train_test_split(
+                x_train, y_train,
                 test_size=test_size, random_state=seed)
-            X_splits = [X_train, X_test, X_val]
-            Y_splits = [Y_train, Y_test, Y_val]
+            x_splits = [x_train, x_test, x_val]
+            y_splits = [y_train, y_test, y_val]
         else:
-            X_splits = [X_train, X_test]
-            Y_splits = [Y_train, Y_test]
+            x_splits = [x_train, x_test]
+            y_splits = [y_train, y_test]
 
-        return Split(X_splits), Split(Y_splits)
+        return Split(x_splits), Split(y_splits)
 
-    def describe(self):
+    def to_numerical(self, to_convert):
+        """
+        Convert the specified column or columns to numbers
+        :param to_convert: column or column list to be converted
+        :return: object
+        """
+        if isinstance(to_convert, list) is not True:
+            to_convert = [to_convert]
+
+        for column_name in to_convert:
+            if column_name in list(self.features):
+                self.features[column_name] = pd.to_numeric(self.features[column_name])
+            else:
+                self.target = pd.to_numeric(self.target)
+
+        self.metainfo()
+        return self
+
+    def to_categorical(self, to_convert):
+        """
+        Convert the specified column or columns to categories
+        :param to_convert: column or column list to be converted
+        :return: object
+        """
+        if isinstance(to_convert, list) is not True:
+            to_convert = [to_convert]
+
+        for column_name in to_convert:
+            if column_name in list(self.features):
+                self.features[column_name] = self.features[column_name].apply(str)
+            else:
+                self.target = self.target.apply(str)
+
+        self.metainfo()
+        return self
+
+    #
+    # Description methods, printing out summaries for dataset or features.
+    #
+
+    def describe_dataset(self):
         """
         Printout the metadata information collected when calling the
         metainfo() method.
@@ -547,6 +617,7 @@ class Dataset:
                 self.describe_numerical(self.target)
         else:
             print('Target: Not set')
+        return
 
     def describe_categorical(self, feature, inline=False):
         """
@@ -559,6 +630,7 @@ class Dataset:
         cat_proportion = [count / cat_counts.sum()
                           for count in cat_counts]
         if inline is False:
+            print('\'', feature.name, '\'', sep='')
             print('  {} categories'.format(num_categories))
             for cat in range(len(cat_proportion)):
                 print('  - \'{}\': {} ({:.04})'.format(
@@ -601,8 +673,10 @@ class Dataset:
         """
         description = self.numerical_description(feature)
         if inline is False:
+            print('\'', feature.name, '\'', sep='')
             for k, v in description.items():
-                print('  {:<6s}: {:.04f}'.format(k, v))
+                print('  {:<4s}: {:.04f}'.format(k, v))
+            return
         else:
             body = ('{}({:<}) ' * len(description))[:-1]
             # arguments = list(map(str, list(description.values())))
@@ -611,15 +685,25 @@ class Dataset:
             body_formatted = body.format(*values_flattened)
             return body_formatted
 
-    def describe_feature(self, feature, inline=False):
+    def describe(self, feature_name=None, inline=False):
         """
+        Wrapper.
         Calls the proper feature description method, depending on whether the
-        feature is numerical or categorical
-        :param feature: the feature
+        feature is numerical or categorical. If no arguments are passed, the
+        description of the entire dataset is provided.
+        :param feature_name: the feature
         :param inline: whether the output is multiple lines or inline.
         :return: the string, only when inline=True
         """
-        if feature.dtype.name in ['bool', 'object', 'string']:
+        if feature_name is None:
+            return self.describe_dataset()
+
+        assert feature_name in (list(self.features) + [self.target.name])
+        if feature_name == self.target.name:
+            feature = self.target
+        else:
+            feature = self.features[feature_name]
+        if feature.dtype.name in self.categorical_dtypes:
             return self.describe_categorical(feature, inline)
         else:
             return self.describe_numerical(feature, inline)
@@ -637,11 +721,12 @@ class Dataset:
             max_width = max_len_in_list
         formatting = '{{:<{}s}}: {{:<10s}} {{}}'.format(max_width)
         print('\nFeatures Summary:')
-        for feature in list(self.features):
-            feature_formatted = '\'' + feature + '\''
+        for feature_name in list(self.features):
+            feature_formatted = '\'' + feature_name + '\''
             print(formatting.format(
-                feature_formatted, self.features[feature].dtype.name,
-                self.describe_feature(self.features[feature], inline=True)))
+                feature_formatted, self.features[feature_name].dtype.name,
+                self.describe(feature_name, inline=True)))
+        return
 
     def table(self, which='all', max_width=80):
         """
@@ -670,6 +755,7 @@ class Dataset:
                 format_str += '{{:<{:d}}}'.format(col_width)
             print(format_str.format(*f_list[from_idx:to_idx]))
         print('-' * ((max_fields * max_length) + (max_fields - 1)))
+        return
 
     def plot_corr_matrix(self, corr_matrix):
         plt.subplots(figsize=(11, 9))
@@ -680,3 +766,4 @@ class Dataset:
         sns.heatmap(corr_matrix, mask=mask, cmap=cmap, vmax=0.75, center=0,
                     square=True, linewidths=.5, cbar_kws={"shrink": .5});
         plt.show();
+        return
