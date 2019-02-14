@@ -1,20 +1,18 @@
+import warnings
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
 import statsmodels.api as sm
-import warnings
-
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler, PowerTransformer, \
-    OneHotEncoder
-from sklearn_pandas import DataFrameMapper
-from scipy.stats import skew, boxcox_normmax
 from scipy.special import boxcox1p
+from scipy.stats import skew, boxcox_normmax
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler, PowerTransformer
+from sklearn_pandas import DataFrameMapper
 
-from dataset.split import Split
 from dataset.correlations import cramers_v
-
+from dataset.split import Split
 
 warnings.simplefilter(action='ignore')
 
@@ -24,13 +22,15 @@ warnings.simplefilter(action='ignore')
 #
 
 
-class Dataset:
+class Dataset(object):
     """
     This class allows a simpler representation of the dataset used
     to build a model in class. It allows loading a remote CSV by
     providing an URL to the initialization method of the object.
 
         my_data = Dataset(URL)
+
+        my_data = Dataset.from_dataframe(my_dataframe)
         
     """
     
@@ -62,12 +62,20 @@ class Dataset:
                 raise RuntimeError(
                     "No data location, nor DataFrame passed to constructor")
         self.features = self.data.copy()
+        self.numbers_to_float()
         self.metainfo()
 
     @classmethod
     def from_dataframe(cls, df):
         return cls(data_location=None, data_frame=df)
         
+    def numbers_to_float(self):
+        columns = self.features.select_dtypes(include=[np.number]).columns.tolist()
+        for column_name in columns:
+            self.features[column_name] = pd.to_numeric(
+                self.features[column_name]).astype(float)
+        return
+
     def set_target(self, target_name):
         """
         Set the target variable for this dataset. This will create a new
@@ -127,10 +135,10 @@ class Dataset:
         Find outliers, using bonferroni criteria, from the numerical features.
         Returns a list of indices where outliers are present
         """
-        ols = sm.OLS(endog = self.target, exog = self.select('numerical'))
+        ols = sm.OLS(endog=self.target, exog=self.select('numerical'))
         fit = ols.fit()
         test = fit.outlier_test()['bonf(p)']
-        return list(test[test<1e-3].index)
+        return list(test[test < 1e-3].index)
 
     def scale(self, features_of_type='numerical', return_series=False):
         """
@@ -211,18 +219,13 @@ class Dataset:
         corr_numericals, _ = self.numerical_correlated(threshold)
         return corr_categoricals + corr_numericals
 
-    def numerical_correlated(self,
-                             threshold=0.9):
+    def numerical_correlated(self, threshold=0.9):
         """
         Build a correlation matrix between all the features in data set
-        :param subset: Specify which subset of features use to build the
-        correlation matrix. Default 'features'
-        :param method: Method used to build the correlation matrix.
-        Default is 'Spearman' (Other options: 'Pearson')
         :param threshold: Threshold beyond which considering high correlation.
         Default is 0.9
         :return: The list of columns that are highly correlated and could be
-        droped out from dataset.
+        drop out from dataset.
         """
         corr_matrix = np.absolute(
             self.select('numerical').corr(method='spearman')).abs()
@@ -279,21 +282,29 @@ class Dataset:
                            initial_list=None,
                            threshold_in=0.01,
                            threshold_out=0.05,
-                           verbose=True):
+                           verbose=False):
         """
         Perform a forward-backward feature selection based on p-value from
         statsmodels.api.OLS
         Your features must be all numerical, so be sure to onehot_encode them
         before calling this method.
         Always set threshold_in < threshold_out to avoid infinite looping.
+        All features involved must be numerical and types must be float.
+        Target variable must also be float. You can convert it back to a
+        categorical type after calling this method.
 
-        Arguments:
-            initial_list - list of features to start with (column names of X)
-            threshold_in - include a feature if its p-value < threshold_in
-            threshold_out - exclude a feature if its p-value > threshold_out
-            verbose - whether to print the sequence of inclusions and exclusions
+        :parameter initial_list: list of features to start with (column names
+        of X)
+        :parameter threshold_in: include a feature if its p-value < threshold_in
+        :parameter threshold_out: exclude a feature if its
+        p-value > threshold_out
+        :parameter verbose: whether to print the sequence of inclusions and
+        exclusions
+        :return: list of selected features
 
-        Returns: list of selected features
+        Example:
+
+            my_data.stepwise_selection()
 
         See https://en.wikipedia.org/wiki/Stepwise_regression for the details
         Taken from: https://datascience.stackexchange.com/a/24823
@@ -301,6 +312,8 @@ class Dataset:
         if initial_list is None:
             initial_list = []
         assert len(self.names('categorical')) == 0
+        assert self.target.dtype.name == 'float64'
+
         included = list(initial_list)
         while True:
             changed = False
@@ -377,6 +390,7 @@ class Dataset:
         in the list of columns and therefore, cannot be onehot encoded.
 
         Example:
+
             # Encodes a single column named 'my_column_name'
             my_data.onehot_encode('my_column_name')
 
@@ -399,7 +413,7 @@ class Dataset:
                  pd.get_dummies(
                      self.features[column_to_convert],
                      prefix=column_to_convert,
-                     dtype=bool)
+                     dtype=float)
                  ],
                 axis=1)
         self.features = new_df.copy()
@@ -526,8 +540,6 @@ class Dataset:
         Drop samples with NAs from the column or list of columns passed
         in second argument.
 
-        :param column: column name or list of columns from which to remove
-        NA entries
         :return: object
         """
         self.features.dropna()
@@ -539,7 +551,7 @@ class Dataset:
               test_size=0.2, 
               validation_split=False):
         """
-        From an input dataframe, separate features from target, and 
+        From an input data frame, separate features from target, and
         produce splits (with or without validation).
         """
         assert self.target is not None
@@ -574,7 +586,8 @@ class Dataset:
 
         for column_name in to_convert:
             if column_name in list(self.features):
-                self.features[column_name] = pd.to_numeric(self.features[column_name])
+                self.features[column_name] = pd.to_numeric(
+                    self.features[column_name])
             else:
                 self.target = pd.to_numeric(self.target)
 
@@ -646,7 +659,7 @@ class Dataset:
         cat_proportion = [count / cat_counts.sum()
                           for count in cat_counts]
         if inline is False:
-            print('\'', feature.name, '\'', sep='')
+            print('\'', feature.name, '\' (', feature.dtype.name, ')', sep='')
             print('  {} categories'.format(num_categories))
             for cat in range(len(cat_proportion)):
                 print('  - \'{}\': {} ({:.04})'.format(
@@ -694,7 +707,7 @@ class Dataset:
                 print('  {:<4s}: {:.04f}'.format(k, v))
             return
         else:
-            body = ('{}({:<}) ' * len(description))[:-1]
+            body = ('{}({:<.4}) ' * len(description))[:-1]
             values = [(k, str(description[k])) for k in description]
             values_flattened = list(sum(values, ()))
             body_formatted = body.format(*values_flattened)
@@ -713,8 +726,13 @@ class Dataset:
         if feature_name is None:
             return self.describe_dataset()
 
-        assert feature_name in (list(self.features) + [self.target.name])
-        if feature_name == self.target.name:
+        # It could happen that target has not yet been defined.
+        target_name = None if self.target is None else self.target.name
+
+        # If feature specified, ensure that it is contained somewhere
+        assert feature_name in (list(self.features) + [target_name])
+
+        if feature_name == target_name:
             feature = self.target
         else:
             feature = self.features[feature_name]
@@ -772,7 +790,8 @@ class Dataset:
         print('-' * ((max_fields * max_length) + (max_fields - 1)))
         return
 
-    def plot_corr_matrix(self, corr_matrix):
+    @staticmethod
+    def plot_correlation_matrix(corr_matrix):
         plt.subplots(figsize=(11, 9))
         # Generate a mask for the upper triangle
         mask = np.zeros_like(corr_matrix, dtype=np.bool)
