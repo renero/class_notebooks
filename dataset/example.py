@@ -2,38 +2,28 @@ import warnings
 
 warnings.filterwarnings('ignore')
 
-import pandas as pd
 from dataset import Dataset
 
+print('Pokemon dataset')
+pokemon = Dataset('../data/pokemon.csv.gz')
+pokemon.set_target('Legendary')
+pokemon.describe()
+pokemon.summary()
 
-houses = Dataset('../data/houseprices_prepared.csv.gz')
-houses.describe()
-
-houses.replace_na(column='Electrical', value='Unknown')
-houses.replace_na(column=houses.names('categorical_na'), value='None')
-houses.set_target('SalePrice')
-houses.describe()
-
-houses.drop_columns('Id')
-houses.describe()
-
-houses.aggregate(['1stFlrSF','2ndFlrSF','BsmtFinSF1','BsmtFinSF2'], 'HouseSF')
-houses.describe()
-
-houses.aggregate(['OpenPorchSF','3SsnPorch','EnclosedPorch','ScreenPorch',
-                  'WoodDeckSF'], 'HousePorch')
-houses.describe()
-
-houses.aggregate(['FullBath', 'BsmtFullBath', 'HalfBath', 'BsmtHalfBath'],
-                 'HouseBaths')
-houses.describe()
-
-#
-# Categorical examples
-#
-d = {'col1': [1, 2, 3], 'col2': ['a', 'a', 'b']}
-df = pd.DataFrame(data=d)
-ds = Dataset.from_dataframe(df)
-ds.set_target('col2')
-ds.describe()
-print(list(ds.select('numerical')))
+print('--')
+hr = Dataset('/Users/renero/Downloads/hr-analytics.zip')
+hr.set_target('left')
+hr.summary()
+print('\n--')
+print('List of skewed numerical features:')
+print(hr.skewed_features())
+print('\n--')
+print('Converting categoricals to dummies')
+hr.to_categorical(['number_project', 'time_spend_company',
+                   'promotion_last_5years', 'Work_accident'])
+hr.onehot_encode(hr.names('categorical'))
+hr.summary()
+print('\nStepwise feature selection')
+hr.keep_columns(hr.stepwise_selection()).describe()
+print('\nFeatures highly correlated')
+hr.drop_columns(hr.correlated()).describe()

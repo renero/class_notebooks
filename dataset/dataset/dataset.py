@@ -1,20 +1,18 @@
+import warnings
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
 import statsmodels.api as sm
-import warnings
-
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler, PowerTransformer, \
-    OneHotEncoder
-from sklearn_pandas import DataFrameMapper
-from scipy.stats import skew, boxcox_normmax
 from scipy.special import boxcox1p
+from scipy.stats import skew, boxcox_normmax
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler, PowerTransformer
+from sklearn_pandas import DataFrameMapper
 
-from dataset.split import Split
 from dataset.correlations import cramers_v
-
+from dataset.split import Split
 
 warnings.simplefilter(action='ignore')
 
@@ -24,13 +22,15 @@ warnings.simplefilter(action='ignore')
 #
 
 
-class Dataset:
+class Dataset(object):
     """
     This class allows a simpler representation of the dataset used
     to build a model in class. It allows loading a remote CSV by
     providing an URL to the initialization method of the object.
 
         my_data = Dataset(URL)
+
+        my_data = Dataset.from_dataframe(my_dataframe)
         
     """
     
@@ -41,6 +41,7 @@ class Dataset:
 
     meta_tags = ['all', 'numerical', 'categorical', 'complete',
                  'numerical_na', 'categorical_na', 'features', 'target']
+    categorical_dtypes = ['bool', 'object', 'string']
 
     def __init__(self, data_location=None, data_frame=None, *args, **kwargs):
         """
@@ -61,12 +62,20 @@ class Dataset:
                 raise RuntimeError(
                     "No data location, nor DataFrame passed to constructor")
         self.features = self.data.copy()
+        self.numbers_to_float()
         self.metainfo()
 
     @classmethod
     def from_dataframe(cls, df):
         return cls(data_location=None, data_frame=df)
         
+    def numbers_to_float(self):
+        columns = self.features.select_dtypes(include=[np.number]).columns.tolist()
+        for column_name in columns:
+            self.features[column_name] = pd.to_numeric(
+                self.features[column_name]).astype(float)
+        return
+
     def set_target(self, target_name):
         """
         Set the target variable for this dataset. This will create a new
@@ -126,10 +135,10 @@ class Dataset:
         Find outliers, using bonferroni criteria, from the numerical features.
         Returns a list of indices where outliers are present
         """
-        ols = sm.OLS(endog = self.target, exog = self.select('numerical'))
+        ols = sm.OLS(endog=self.target, exog=self.select('numerical'))
         fit = ols.fit()
         test = fit.outlier_test()['bonf(p)']
-        return list(test[test<1e-3].index)
+        return list(test[test < 1e-3].index)
 
     def scale(self, features_of_type='numerical', return_series=False):
         """
@@ -152,7 +161,7 @@ class Dataset:
         else:
             return self
 
-    def ensure_normality(self,
+    def fix_skewness(self,
                          features_of_type='numerical',
                          return_series=False):
         """
@@ -177,7 +186,7 @@ class Dataset:
         if return_series is True:
             return self.features[self.names(features_of_type)]
     
-    def skewness(self, threshold=0.75, fix=False, return_series=False):
+    def skewed_features(self, threshold=0.75, fix=False, return_series=False):
         """
         Returns the list of numerical features that present skewness
         :return: A pandas Series with the features and their skewness
@@ -195,23 +204,6 @@ class Dataset:
         if return_series is True:
             return feature_skew
 
-    def onehot_encode(self):
-        """
-        Encodes the categorical features in the dataset, with OneHotEncode
-        """
-        new_df = self.features[self.names('numerical')].copy()
-        for categorical_column in self.names('categorical'):
-            new_df = pd.concat(
-                [new_df,
-                 pd.get_dummies(
-                     self.features[categorical_column],
-                     prefix=categorical_column)
-                 ],
-                axis=1)
-        self.features = new_df.copy()
-        self.metainfo()
-        return self
-
     def correlated(self, threshold=0.9):
         """
         Return the features that are highly correlated to with other
@@ -227,18 +219,13 @@ class Dataset:
         corr_numericals, _ = self.numerical_correlated(threshold)
         return corr_categoricals + corr_numericals
 
-    def numerical_correlated(self,
-                             threshold=0.9):
+    def numerical_correlated(self, threshold=0.9):
         """
         Build a correlation matrix between all the features in data set
-        :param subset: Specify which subset of features use to build the
-        correlation matrix. Default 'features'
-        :param method: Method used to build the correlation matrix.
-        Default is 'Spearman' (Other options: 'Pearson')
         :param threshold: Threshold beyond which considering high correlation.
         Default is 0.9
         :return: The list of columns that are highly correlated and could be
-        droped out from dataset.
+        drop out from dataset.
         """
         corr_matrix = np.absolute(
             self.select('numerical').corr(method='spearman')).abs()
@@ -295,21 +282,29 @@ class Dataset:
                            initial_list=None,
                            threshold_in=0.01,
                            threshold_out=0.05,
-                           verbose=True):
+                           verbose=False):
         """
         Perform a forward-backward feature selection based on p-value from
         statsmodels.api.OLS
         Your features must be all numerical, so be sure to onehot_encode them
         before calling this method.
         Always set threshold_in < threshold_out to avoid infinite looping.
+        All features involved must be numerical and types must be float.
+        Target variable must also be float. You can convert it back to a
+        categorical type after calling this method.
 
-        Arguments:
-            initial_list - list of features to start with (column names of X)
-            threshold_in - include a feature if its p-value < threshold_in
-            threshold_out - exclude a feature if its p-value > threshold_out
-            verbose - whether to print the sequence of inclusions and exclusions
+        :parameter initial_list: list of features to start with (column names
+        of X)
+        :parameter threshold_in: include a feature if its p-value < threshold_in
+        :parameter threshold_out: exclude a feature if its
+        p-value > threshold_out
+        :parameter verbose: whether to print the sequence of inclusions and
+        exclusions
+        :return: list of selected features
 
-        Returns: list of selected features
+        Example:
+
+            my_data.stepwise_selection()
 
         See https://en.wikipedia.org/wiki/Stepwise_regression for the details
         Taken from: https://datascience.stackexchange.com/a/24823
@@ -317,6 +312,8 @@ class Dataset:
         if initial_list is None:
             initial_list = []
         assert len(self.names('categorical')) == 0
+        assert self.target.dtype.name == 'float64'
+
         included = list(initial_list)
         while True:
             changed = False
@@ -353,8 +350,7 @@ class Dataset:
         return included
 
     #
-    # From this point, the methods are related to data manipulation of the
-    # pandas dataframe.
+    # Methods are related to data manipulation of the pandas dataframe.
     #
 
     def select(self, which):
@@ -385,6 +381,45 @@ class Dataset:
         assert which in self.meta_tags
         return self.meta[which]
 
+    def onehot_encode(self, to_convert=None):
+        """
+        Encodes the categorical features in the dataset, with OneHotEncode
+
+        :parameter to_convert: column or list of columns to be one-hot encoded.
+        The only restriction is that the target variable cannot be specified
+        in the list of columns and therefore, cannot be onehot encoded.
+
+        Example:
+
+            # Encodes a single column named 'my_column_name'
+            my_data.onehot_encode('my_column_name')
+
+            # Encodes 'col1' and 'col2'
+            my_data.onehot_encode(['col1', 'col2'])
+
+            # Encodes all categorical features in the dataset
+            my_data.onehot_encode(my_data.names('categorical'))
+
+        """
+        assert to_convert is not None
+        if isinstance(to_convert, list) is not True:
+            to_convert = [to_convert]
+
+        new_df = self.features[
+            self.features.columns.difference(to_convert)].copy()
+        for column_to_convert in to_convert:
+            new_df = pd.concat(
+                [new_df,
+                 pd.get_dummies(
+                     self.features[column_to_convert],
+                     prefix=column_to_convert,
+                     dtype=float)
+                 ],
+                axis=1)
+        self.features = new_df.copy()
+        self.metainfo()
+        return self
+
     def add_column(self, serie):
         """
         Add a Series as a new column to the dataset.
@@ -405,6 +440,7 @@ class Dataset:
         
             my_data.drop_columns('column_name')
             my_data.drop_columns(['column1', 'column2', 'column3'])
+
         """
         if isinstance(columns_list, list) is not True:
             columns_list = [columns_list]
@@ -475,10 +511,21 @@ class Dataset:
         self.metainfo()
         return self
         
+    def nas(self):
+        """
+        Returns the list of features that present NA entries
+        :return: the list of feature names presenting NA
+        """
+        return self.names('numerical_na') + self.names('categorical_na')
+
     def replace_na(self, column, value):
         """
-        Replace any NA occurrence from the column or list of columns passed 
+        Replace any NA occurrence from the column or list of columns passed
         by the value passed as second argument.
+        :param column: Column name or list of column names from which to
+        replace NAs with the value passes in the second argument
+        :param value: value to be used as replacement
+        :return: the object.
         """
         if isinstance(column, list) is True:
             for col in column:
@@ -487,37 +534,89 @@ class Dataset:
             self.data[column].fillna(value, inplace=True)
         self.metainfo()
         return self
+
+    def drop_na(self):
+        """
+        Drop samples with NAs from the column or list of columns passed
+        in second argument.
+
+        :return: object
+        """
+        self.features.dropna()
+        self.metainfo()
+        return self
         
     def split(self,
               seed=1024, 
               test_size=0.2, 
               validation_split=False):
         """
-        From an input dataframe, separate features from target, and 
+        From an input data frame, separate features from target, and
         produce splits (with or without validation).
         """
         assert self.target is not None
         
-        X = pd.DataFrame(self.features, columns=self.names('features'))
-        Y = pd.DataFrame(self.target)
+        x = pd.DataFrame(self.features, columns=self.names('features'))
+        y = pd.DataFrame(self.target)
 
-        X_train, X_test, Y_train, Y_test = train_test_split(
-            X, Y, 
+        x_train, x_test, y_train, y_test = train_test_split(
+            x, y,
             test_size=test_size, random_state=seed)
 
         if validation_split is True:
-            X_train, X_val, Y_train, Y_val = train_test_split(
-                X_train, Y_train, 
+            x_train, x_val, y_train, y_val = train_test_split(
+                x_train, y_train,
                 test_size=test_size, random_state=seed)
-            X_splits = [X_train, X_test, X_val]
-            Y_splits = [Y_train, Y_test, Y_val]
+            x_splits = [x_train, x_test, x_val]
+            y_splits = [y_train, y_test, y_val]
         else:
-            X_splits = [X_train, X_test]
-            Y_splits = [Y_train, Y_test]
+            x_splits = [x_train, x_test]
+            y_splits = [y_train, y_test]
 
-        return Split(X_splits), Split(Y_splits)
+        return Split(x_splits), Split(y_splits)
 
-    def describe(self):
+    def to_numerical(self, to_convert):
+        """
+        Convert the specified column or columns to numbers
+        :param to_convert: column or column list to be converted
+        :return: object
+        """
+        if isinstance(to_convert, list) is not True:
+            to_convert = [to_convert]
+
+        for column_name in to_convert:
+            if column_name in list(self.features):
+                self.features[column_name] = pd.to_numeric(
+                    self.features[column_name])
+            else:
+                self.target = pd.to_numeric(self.target)
+
+        self.metainfo()
+        return self
+
+    def to_categorical(self, to_convert):
+        """
+        Convert the specified column or columns to categories
+        :param to_convert: column or column list to be converted
+        :return: object
+        """
+        if isinstance(to_convert, list) is not True:
+            to_convert = [to_convert]
+
+        for column_name in to_convert:
+            if column_name in list(self.features):
+                self.features[column_name] = self.features[column_name].apply(str)
+            else:
+                self.target = self.target.apply(str)
+
+        self.metainfo()
+        return self
+
+    #
+    # Description methods, printing out summaries for dataset or features.
+    #
+
+    def describe_dataset(self):
         """
         Printout the metadata information collected when calling the
         metainfo() method.
@@ -539,31 +638,128 @@ class Dataset:
             len(self.meta['complete'])))
         print('--')
         if self.target is not None:
-            print('Target: {}'.format(self.meta['target']))
+            print('Target: {} ({})'.format(
+                self.meta['target'], self.target.dtype.name))
             if self.target.dtype.name == 'object':
-                self.describe_categorical()
+                self.describe_categorical(self.target)
             else:
-                self.describe_numerical()
+                self.describe_numerical(self.target)
         else:
             print('Target: Not set')
+        return
 
-    def describe_categorical(self):
-        num_categories = self.target.nunique()
-        cat_counts = self.target.value_counts().values
+    def describe_categorical(self, feature, inline=False):
+        """
+        Describe a categorical column by printing num classes and proportion
+        :return: nothing
+        """
+        num_categories = feature.nunique()
+        cat_names = feature.unique()
+        cat_counts = feature.value_counts().values
         cat_proportion = [count / cat_counts.sum()
                           for count in cat_counts]
-        print('  {} categories'.format(num_categories))
-        for cat in range(len(cat_proportion)):
-            print('  - \'{}\' {:.04}'.format(
-                cat_counts[cat], cat_proportion[cat]))
+        if inline is False:
+            print('\'', feature.name, '\' (', feature.dtype.name, ')', sep='')
+            print('  {} categories'.format(num_categories))
+            for cat in range(len(cat_proportion)):
+                print('  - \'{}\': {} ({:.04})'.format(
+                    cat_names[cat], cat_counts[cat], cat_proportion[cat]))
+        else:
+            if num_categories <= 5:
+                max_categories = num_categories
+                trail = ''
+            else:
+                max_categories = 5
+                trail = '...'
+            header = '{:d} categs. '.format(num_categories)
+            body = '\'{}\'({:d}, {:.4f}) ' * max_categories
+            values = [(cat_names[cat], cat_counts[cat], cat_proportion[cat])
+                for cat in range(max_categories)]
+            values_flattened = list(sum(values, ()))
+            body_formatted = body.format(*values_flattened)
+            return header + body_formatted + trail
 
-    def describe_numerical(self):
-        print('  Min.  : {:.04f}'.format(np.min(self.target)))
-        print('  1st Q.: {:.04f}'.format(np.percentile(self.target, 25)))
-        print('  Median: {:.04f}'.format(np.median(self.target)))
-        print('  Mean  : {:.04f}'.format(np.mean(self.target)))
-        print('  3rd Q.: {:.04f}'.format(np.percentile(self.target, 75)))
-        print('  Max.  : {:.04f}'.format(np.max(self.target)))
+
+    def numerical_description(self, feature):
+        """
+        Build a dictionary with the main numerical descriptors for a feature.
+        :param feature: The feature (column) to be analyzed
+        :return: a dictionary with the indicators and its values.
+        """
+        description = dict()
+        description['Min.'] = np.min(feature)
+        description['1stQ'] = np.percentile(feature, 25)
+        description['Med.'] = np.median(feature)
+        description['Mean'] = np.mean(feature)
+        description['3rdQ'] = np.percentile(feature, 75)
+        description['Max.'] = np.max(feature)
+        return description
+
+    def describe_numerical(self, feature, inline=False):
+        """
+        Describe a numerical column by printing min, max, med, mean, 1Q, 3Q
+        :return: nothing
+        """
+        description = self.numerical_description(feature)
+        if inline is False:
+            print('\'', feature.name, '\'', sep='')
+            for k, v in description.items():
+                print('  {:<4s}: {:.04f}'.format(k, v))
+            return
+        else:
+            body = ('{}({:<.4}) ' * len(description))[:-1]
+            values = [(k, str(description[k])) for k in description]
+            values_flattened = list(sum(values, ()))
+            body_formatted = body.format(*values_flattened)
+            return body_formatted
+
+    def describe(self, feature_name=None, inline=False):
+        """
+        Wrapper.
+        Calls the proper feature description method, depending on whether the
+        feature is numerical or categorical. If no arguments are passed, the
+        description of the entire dataset is provided.
+        :param feature_name: the feature
+        :param inline: whether the output is multiple lines or inline.
+        :return: the string, only when inline=True
+        """
+        if feature_name is None:
+            return self.describe_dataset()
+
+        # It could happen that target has not yet been defined.
+        target_name = None if self.target is None else self.target.name
+
+        # If feature specified, ensure that it is contained somewhere
+        assert feature_name in (list(self.features) + [target_name])
+
+        if feature_name == target_name:
+            feature = self.target
+        else:
+            feature = self.features[feature_name]
+        if feature.dtype.name in self.categorical_dtypes:
+            return self.describe_categorical(feature, inline)
+        else:
+            return self.describe_numerical(feature, inline)
+
+    def summary(self):
+        """
+        Printout a summary of each feature.
+        :return: N/A
+        """
+        max_width = 25
+        max_len_in_list = np.max([len(s) for s in list(self.features)]) + 2
+        if max_len_in_list > max_width:
+            max_width = max_len_in_list
+        else:
+            max_width = max_len_in_list
+        formatting = '{{:<{}s}}: {{:<10s}} {{}}'.format(max_width)
+        print('\nFeatures Summary:')
+        for feature_name in list(self.features):
+            feature_formatted = '\'' + feature_name + '\''
+            print(formatting.format(
+                feature_formatted, self.features[feature_name].dtype.name,
+                self.describe(feature_name, inline=True)))
+        return
 
     def table(self, which='all', max_width=80):
         """
@@ -592,8 +788,10 @@ class Dataset:
                 format_str += '{{:<{:d}}}'.format(col_width)
             print(format_str.format(*f_list[from_idx:to_idx]))
         print('-' * ((max_fields * max_length) + (max_fields - 1)))
+        return
 
-    def plot_corr_matrix(self, corr_matrix):
+    @staticmethod
+    def plot_correlation_matrix(corr_matrix):
         plt.subplots(figsize=(11, 9))
         # Generate a mask for the upper triangle
         mask = np.zeros_like(corr_matrix, dtype=np.bool)
@@ -602,3 +800,4 @@ class Dataset:
         sns.heatmap(corr_matrix, mask=mask, cmap=cmap, vmax=0.75, center=0,
                     square=True, linewidths=.5, cbar_kws={"shrink": .5});
         plt.show();
+        return
