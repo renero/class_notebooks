@@ -8,6 +8,7 @@ import statsmodels.api as sm
 from scipy.special import boxcox1p
 from scipy.stats import skew, boxcox_normmax
 from sklearn.model_selection import train_test_split
+from sklearn.neighbors import LocalOutlierFactor
 from sklearn.preprocessing import StandardScaler, PowerTransformer
 from sklearn_pandas import DataFrameMapper
 
@@ -119,7 +120,7 @@ class Dataset(object):
         
         # Update META-information
         meta['description'] = descr
-        meta['all'] = list(self.data)
+        meta['all'] = list(self.features)
         meta['features'] = list(self.features)
         meta['target'] = self.target.name if self.target is not None else None
         meta['categorical'] = categorical_features
@@ -135,10 +136,16 @@ class Dataset(object):
         Find outliers, using bonferroni criteria, from the numerical features.
         Returns a list of indices where outliers are present
         """
-        ols = sm.OLS(endog=self.target, exog=self.select('numerical'))
-        fit = ols.fit()
-        test = fit.outlier_test()['bonf(p)']
-        return list(test[test < 1e-3].index)
+        # ols = sm.OLS(endog=self.target, exog=self.select('numerical'))
+        # fit = ols.fit()
+        # test = fit.outlier_test()['bonf(p)']
+        # return list(# test[test < 1e-3].index)
+        X = self.select('numerical')
+        lof = LocalOutlierFactor(n_neighbors=20, contamination=0.1)
+        y_pred = lof.fit_predict(X)
+        print(lof.negative_outlier_factor_)
+        return lof.negative_outlier_factor_
+
 
     def scale(self, features_of_type='numerical', return_series=False):
         """
@@ -665,11 +672,11 @@ class Dataset(object):
                 print('  - \'{}\': {} ({:.04})'.format(
                     cat_names[cat], cat_counts[cat], cat_proportion[cat]))
         else:
-            if num_categories <= 5:
+            if num_categories <= 4:
                 max_categories = num_categories
                 trail = ''
             else:
-                max_categories = 5
+                max_categories = 4
                 trail = '...'
             header = '{:d} categs. '.format(num_categories)
             body = '\'{}\'({:d}, {:.4f}) ' * max_categories
@@ -741,23 +748,27 @@ class Dataset(object):
         else:
             return self.describe_numerical(feature, inline)
 
-    def summary(self):
+    def summary(self, what='all'):
         """
         Printout a summary of each feature.
+        :type what: the list of columns to be summarized: all, numerical,
+        categorical, etc.
         :return: N/A
         """
+        assert what in self.meta_tags
+
         max_width = 25
-        max_len_in_list = np.max([len(s) for s in list(self.features)]) + 2
+        max_len_in_list = np.max([len(s) for s in list(self.select(what))]) + 2
         if max_len_in_list > max_width:
             max_width = max_len_in_list
         else:
             max_width = max_len_in_list
         formatting = '{{:<{}s}}: {{:<10s}} {{}}'.format(max_width)
-        print('\nFeatures Summary:')
-        for feature_name in list(self.features):
+        print('\nFeatures Summary ({}):'.format(what))
+        for feature_name in list(self.select(what)):
             feature_formatted = '\'' + feature_name + '\''
             print(formatting.format(
-                feature_formatted, self.features[feature_name].dtype.name,
+                feature_formatted, self.select(what)[feature_name].dtype.name,
                 self.describe(feature_name, inline=True)))
         return
 
