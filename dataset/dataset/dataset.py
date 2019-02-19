@@ -514,7 +514,9 @@ class Dataset(object):
         """
         Remove the list of samples from the dataset. 
         """
-        self.data.drop(self.data.index[index_list])
+        self.features = self.features.drop(self.features.index[index_list])
+        if self.target is not None:
+            self.target = self.target.drop(self.target.index[index_list])
         self.metainfo()
         return self
         
@@ -544,11 +546,12 @@ class Dataset(object):
 
     def drop_na(self):
         """
-        Drop samples with NAs from the column or list of columns passed
-        in second argument.
+        Drop samples with NAs from the features. If any value is infinite
+        or -infinite, it is converted to NA, and removed also.
 
         :return: object
         """
+        self.features.replace([np.inf, -np.inf], np.nan).dropna(axis=1)
         self.features.dropna()
         self.metainfo()
         return self
@@ -631,17 +634,18 @@ class Dataset(object):
         if self.meta is None:
             self.metainfo()
 
+        print('{} Features. {} Samples'.format(
+            len(self.meta['features']), self.features.shape[0]))
         print('\nAvailable types:', self.meta['description']['dtype'].unique())
-        print('{} Features'.format(len(self.meta['features'])))
-        print('{} categorical features'.format(
+        print('- {} categorical features'.format(
             len(self.meta['categorical'])))
-        print('{} numerical features'.format(
+        print('- {} numerical features'.format(
             len(self.meta['numerical'])))
-        print('{} categorical features with NAs'.format(
+        print('- {} categorical features with NAs'.format(
             len(self.meta['categorical_na'])))
-        print('{} numerical features with NAs'.format(
+        print('- {} numerical features with NAs'.format(
             len(self.meta['numerical_na'])))
-        print('{} Complete features'.format(
+        print('- {} Complete features'.format(
             len(self.meta['complete'])))
         print('--')
         if self.target is not None:
