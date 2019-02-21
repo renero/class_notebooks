@@ -636,16 +636,16 @@ class Dataset(object):
 
         print('{} Features. {} Samples'.format(
             len(self.meta['features']), self.features.shape[0]))
-        print('\nAvailable types:', self.meta['description']['dtype'].unique())
-        print('- {} categorical features'.format(
+        print('Available types:', self.meta['description']['dtype'].unique())
+        print('  · {} categorical features'.format(
             len(self.meta['categorical'])))
-        print('- {} numerical features'.format(
+        print('  · {} numerical features'.format(
             len(self.meta['numerical'])))
-        print('- {} categorical features with NAs'.format(
+        print('  · {} categorical features with NAs'.format(
             len(self.meta['categorical_na'])))
-        print('- {} numerical features with NAs'.format(
+        print('  · {} numerical features with NAs'.format(
             len(self.meta['numerical_na'])))
-        print('- {} Complete features'.format(
+        print('  · {} Complete features'.format(
             len(self.meta['complete'])))
         print('--')
         if self.target is not None:
@@ -673,7 +673,7 @@ class Dataset(object):
             print('\'', feature.name, '\' (', feature.dtype.name, ')', sep='')
             print('  {} categories'.format(num_categories))
             for cat in range(len(cat_proportion)):
-                print('  - \'{}\': {} ({:.04})'.format(
+                print('  · \'{}\': {} ({:.04})'.format(
                     cat_names[cat], cat_counts[cat], cat_proportion[cat]))
         else:
             if num_categories <= 4:
@@ -715,7 +715,7 @@ class Dataset(object):
         if inline is False:
             print('\'', feature.name, '\'', sep='')
             for k, v in description.items():
-                print('  {:<4s}: {:.04f}'.format(k, v))
+                print('  · {:<4s}: {:.04f}'.format(k, v))
             return
         else:
             body = ('{}({:<.4}) ' * len(description))[:-1]
@@ -768,7 +768,7 @@ class Dataset(object):
         else:
             max_width = max_len_in_list
         formatting = '{{:<{}s}}: {{:<10s}} {{}}'.format(max_width)
-        print('\nFeatures Summary ({}):'.format(what))
+        print('Features Summary ({}):'.format(what))
         for feature_name in list(self.select(what)):
             feature_formatted = '\'' + feature_name + '\''
             print(formatting.format(
