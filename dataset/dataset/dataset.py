@@ -39,6 +39,8 @@ class Dataset(object):
     data = None
     target = None
     features = None
+    numerical = None
+    categorical = None
 
     meta_tags = ['all', 'numerical', 'categorical', 'complete',
                  'numerical_na', 'categorical_na', 'features', 'target']
@@ -55,14 +57,13 @@ class Dataset(object):
         :param kwargs: variadic named arguments to pass to read_csv
         """
         if data_location is not None:
-            self.data = pd.read_csv(data_location, *args, **kwargs)
+            self.features = pd.read_csv(data_location, *args, **kwargs)
         else:
             if data_frame is not None:
-                self.data = data_frame
+                self.features = data_frame
             else:
                 raise RuntimeError(
                     "No data location, nor DataFrame passed to constructor")
-        self.features = self.data.copy()
         self.numbers_to_float()
         self.metainfo()
 
@@ -88,11 +89,10 @@ class Dataset(object):
             my_data.set_target('SalePrice')
             
         """
-        if target_name in list(self.features):
-            self.target = self.features.loc[:, target_name].copy()
-            self.features.drop(target_name, axis=1, inplace=True)
-        else:
-            self.target = self.data.loc[:, target_name].copy()
+        assert target_name in list(self.features), "Target name NOT recognized"
+
+        self.target = self.features.loc[:, target_name].copy()
+        self.features.drop(target_name, axis=1, inplace=True)
         self.metainfo()
         return self
         
@@ -129,6 +129,10 @@ class Dataset(object):
         meta['numerical_na'] = numerical_features_na
         meta['complete'] = complete_features
         self.meta = meta
+
+        # Update macro access properties
+        self.numerical = self.select('numerical')
+        self.categorical = self.select('categorical')
         return self
     
     def outliers(self):
@@ -538,9 +542,9 @@ class Dataset(object):
         """
         if isinstance(column, list) is True:
             for col in column:
-                self.data[col].fillna(value, inplace=True)
+                self.features[col].fillna(value, inplace=True)
         else:
-            self.data[column].fillna(value, inplace=True)
+            self.features[column].fillna(value, inplace=True)
         self.metainfo()
         return self
 
@@ -816,3 +820,41 @@ class Dataset(object):
                     square=True, linewidths=.5, cbar_kws={"shrink": .5});
         plt.show();
         return
+
+    def plot_double_density(self, feature, category=None):
+        """
+        Double density plot between a feature and a reference category.
+        :param feature: The name of a feature in the dataset.
+        :param category: The name of the reference category we want to
+        represent the double density plot against. If None, then the target
+        variable is used.
+        :return: None
+
+        Example:
+            # represent multiple density plots, one per unique value of the
+            # target
+            my_data.double_density(my_feature)
+
+            # represent double density plots, one per unique value of the
+            # categorical feature 'my_feature2'
+            my_data.double_density(my_feature1, my_categorical_feature2)
+        """
+        # Get the list of categories
+        if category is None or self.target.name == category:
+            categories = self.target.unique()
+            category_series = self.target
+        else:
+            assert category in list(self.categorical), \
+                '"category" must be a categorical feature'
+            categories = self.features[category].unique()
+            category_series = self.features[category]
+
+        assert feature in self.numerical, '"Feature" must be numerical.'
+        # plot a density for each value of the category
+        for value in categories:
+            sns.distplot(self.features[feature][category_series == value],
+                         hist=False, kde=True,
+                         kde_kws = {'shade': True},
+                         label=str(value))
+            # self.features[feature][category_series == value].plot(
+            #     kind='density', label=str(value))
