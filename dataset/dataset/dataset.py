@@ -34,7 +34,8 @@ class Dataset(object):
         my_data = Dataset.from_dataframe(my_dataframe)
         
     """
-    
+
+    all = None
     meta = None
     data = None
     target = None
@@ -120,7 +121,12 @@ class Dataset(object):
         
         # Update META-information
         meta['description'] = descr
-        meta['all'] = list(self.features)
+        if self.target is not None:
+            meta['all'] = list(self.features) + [self.target.name]
+            self.all = pd.concat([self.features, self.target], axis=1)
+        else:
+            meta['all'] = list(self.features)
+            self.all = self.features
         meta['features'] = list(self.features)
         meta['target'] = self.target.name if self.target is not None else None
         meta['categorical'] = categorical_features
