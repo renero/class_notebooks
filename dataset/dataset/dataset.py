@@ -182,9 +182,7 @@ class Dataset(object):
         else:
             return self
 
-    def fix_skewness(self,
-                         features_of_type='numerical',
-                         return_series=False):
+    def fix_skewness(self, features_of_type='numerical', return_series=False):
         """
         Ensures that the numerical features in the dataset, unless the
         parameter 'what' specifies any other subset selection primitive,
