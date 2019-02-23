@@ -65,6 +65,11 @@ class Dataset(object):
             else:
                 raise RuntimeError(
                     "No data location, nor DataFrame passed to constructor")
+        # When data is read with no headers, column names can be 'int', so
+        # I need to convert them to strings.
+        if isinstance(list(self.features)[0], str) is False:
+            colnames = ['x{}'.format(col) for col in list(self.features)]
+            self.features.columns = colnames
         self.numbers_to_float()
         self.metainfo()
 
@@ -155,7 +160,6 @@ class Dataset(object):
         y_pred = lof.fit_predict(X)
         print(lof.negative_outlier_factor_)
         return lof.negative_outlier_factor_
-
 
     def scale(self, features_of_type='numerical', return_series=False):
         """
