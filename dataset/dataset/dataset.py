@@ -602,6 +602,11 @@ class Dataset(object):
         Convert the specified column or columns to numbers
         :param to_convert: column or column list to be converted
         :return: object
+
+        TODO: It must be possible to perform label encoding if specified.
+              For example, I might want to convert a target variable with strings
+              valued "Yes" and "No" to type "category" or to type "int" with values
+              1 and 0.
         """
         if isinstance(to_convert, list) is not True:
             to_convert = [to_convert]
