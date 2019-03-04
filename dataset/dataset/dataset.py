@@ -44,7 +44,7 @@ class Dataset(object):
 
     meta_tags = ['all', 'numerical', 'categorical', 'complete',
                  'numerical_na', 'categorical_na', 'features', 'target']
-    categorical_dtypes = ['bool', 'object', 'string']
+    categorical_dtypes = ['bool', 'object', 'string', 'category']
 
     def __init__(self, data_location=None, data_frame=None, *args, **kwargs):
         """
@@ -70,7 +70,7 @@ class Dataset(object):
             colnames = ['x{}'.format(col) for col in list(self.features)]
             self.features.columns = colnames
         self.numbers_to_float()
-        self.metainfo()
+        self.update()
 
     @classmethod
     def from_dataframe(cls, df):
@@ -98,10 +98,10 @@ class Dataset(object):
 
         self.target = self.features.loc[:, target_name].copy()
         self.features.drop(target_name, axis=1, inplace=True)
-        self.metainfo()
+        self.update()
         return self
         
-    def metainfo(self):
+    def update(self):
         """
         Builds metainfromation about the dataset, considering the 
         features that are categorical, numerical or does/doesn't contain NA's.
@@ -145,7 +145,7 @@ class Dataset(object):
         self.categorical = self.select('categorical')
         return self
     
-    def outliers(self):
+    def outliers(self, n_neighbors=20):
         """
         Find outliers, using bonferroni criteria, from the numerical features.
         Returns a list of indices where outliers are present
@@ -153,15 +153,11 @@ class Dataset(object):
         # TODO Implement a simple set of methods to select from in order to
                detect outliers.
         """
-        # ols = sm.OLS(endog=self.target, exog=self.select('numerical'))
-        # fit = ols.fit()
-        # test = fit.outlier_test()['bonf(p)']
-        # return list(# test[test < 1e-3].index)
         X = self.select('numerical')
-        lof = LocalOutlierFactor(n_neighbors=20, contamination=0.1)
+        lof = LocalOutlierFactor(n_neighbors=n_neighbors, contamination='auto')
         y_pred = lof.fit_predict(X)
-        print(lof.negative_outlier_factor_)
-        return lof.negative_outlier_factor_
+        outliers = np.where(y_pred == -1)
+        return outliers[0]
 
     def scale(self, features_of_type='numerical', return_series=False):
         """
@@ -178,7 +174,7 @@ class Dataset(object):
             scaled_features,
             index=subset.index,
             columns=subset.columns)
-        self.metainfo()
+        self.update()
         if return_series is True:
             return self.features[self.names(features_of_type)]
         else:
@@ -203,7 +199,7 @@ class Dataset(object):
             normed_features,
             index=subset.index,
             columns=subset.columns)
-        self.metainfo()
+        self.update()
         if return_series is True:
             return self.features[self.names(features_of_type)]
     
@@ -439,20 +435,20 @@ class Dataset(object):
                  ],
                 axis=1)
         self.features = new_df.copy()
-        self.metainfo()
+        self.update()
         return self
 
-    def add_column(self, serie):
+    def add_column(self, series):
         """
         Add a Series as a new column to the dataset.
         Example:
 
-            my_data.add_column(serie)
+            my_data.add_column(series)
             my_data.add_column(name=pandas.Series().values)
         """
-        if serie.name not in self.names('features'):
-            self.features[serie.name] = serie.values
-            self.metainfo()
+        if series.name not in self.names('features'):
+            self.features[series.name] = series.values
+            self.update()
         return self
 
     def drop_columns(self, columns_list):
@@ -469,7 +465,7 @@ class Dataset(object):
         for column in columns_list:
             if column in self.names('features'):
                 self.features.drop(column, axis=1, inplace=True)
-        self.metainfo()
+        self.update()
         return self
 
     def keep_columns(self, to_keep):
@@ -498,7 +494,7 @@ class Dataset(object):
         Example: if we want to sum the values of column1 and column2 into a
         new column called 'column3', we use:
 
-            my_data.aggregate(['column1', 'column2'], 'column3')
+            my_data.aggregate(['column1', 'column2'], 'column3', 'sum')
 
         As a result, 'my_data' will remove 'column1' and 'column2', and the
         operation will be the sum of the values, as it is the default operation.
@@ -522,7 +518,7 @@ class Dataset(object):
         if drop_columns is True:
             self.drop_columns(col_list)
         else:
-            self.metainfo()
+            self.update()
         return self
 
     def drop_samples(self, index_list):
@@ -532,7 +528,7 @@ class Dataset(object):
         self.features = self.features.drop(self.features.index[index_list])
         if self.target is not None:
             self.target = self.target.drop(self.target.index[index_list])
-        self.metainfo()
+        self.update()
         return self
         
     def nas(self):
@@ -556,7 +552,7 @@ class Dataset(object):
                 self.features[col].fillna(value, inplace=True)
         else:
             self.features[column].fillna(value, inplace=True)
-        self.metainfo()
+        self.update()
         return self
 
     def drop_na(self):
@@ -568,7 +564,7 @@ class Dataset(object):
         """
         self.features.replace([np.inf, -np.inf], np.nan).dropna(axis=1)
         self.features.dropna()
-        self.metainfo()
+        self.update()
         return self
         
     def split(self,
@@ -607,9 +603,9 @@ class Dataset(object):
         :return: object
 
         TODO: It must be possible to perform label encoding if specified.
-              For example, I might want to convert a target variable with strings
-              valued "Yes" and "No" to type "category" or to type "int" with values
-              1 and 0.
+              For example, I might want to convert a target variable with
+              strings valued "Yes" and "No" to type "category" or to type
+              "int" with values 1 and 0.
         """
         if isinstance(to_convert, list) is not True:
             to_convert = [to_convert]
@@ -621,7 +617,7 @@ class Dataset(object):
             else:
                 self.target = pd.to_numeric(self.target)
 
-        self.metainfo()
+        self.update()
         return self
 
     def to_categorical(self, to_convert):
@@ -639,7 +635,64 @@ class Dataset(object):
             else:
                 self.target = self.target.apply(str)
 
-        self.metainfo()
+        self.update()
+        return self
+
+    def merge_categories(self, column, old_values, new_value):
+        """
+        Merge a subset of categories present in one of the columns into a
+        new single category. This is normally done when this list of categs
+        is not enough representative.
+
+        Example:
+            my_data.merge_categories(column='color',
+                                     old_values=['grey', 'black'],
+                                     new_value='dark')
+
+        :param column: The column with the categories to be merged
+        :param old_values: The list of categories to be merged
+        :param new_value: The resulting new category after the merge.
+        :return: self.
+        """
+        assert column in self.categorical, "Column must be categorical"
+        assert isinstance(old_values, list), \
+            "Old values must be a list of values to be merged"
+        assert len(old_values) > 1, \
+            "List of values must contains more than 1 value"
+        assert new_value is not None, "New value cannot be None"
+
+        self.features[column] = self.features[column].apply(
+            lambda x: new_value if x in old_values else x).astype('object')
+        self.update()
+        return self
+
+    def merge_values(self, column, old_values, new_value):
+        """
+        Same method as 'merge_categories' but for numerical values.
+        Merge a subset of values present in one of the columns into a
+        new single category. This is normally done when this list of values
+        is not enough representative.
+
+        Example:
+            my_data.merge_values(column='years',
+                                 old_values=['2001', '2002'],
+                                 new_value='2000')
+
+        :param column: The column with the values to be merged
+        :param old_values: The list of values to be merged
+        :param new_value: The resulting new value after the merge.
+        :return: self.
+        """
+        assert column in self.numerical, "Column must be numerical"
+        assert isinstance(old_values, list), \
+            "Old values must be a list of values to be merged"
+        assert len(old_values) > 1, \
+            "List of values must contains more than 1 value"
+        assert new_value is not None, "New value cannot be None"
+
+        self.features[column] = self.features[column].apply(
+            lambda x: new_value if x in old_values else x).astype('float64')
+        self.update()
         return self
 
     #
@@ -652,7 +705,7 @@ class Dataset(object):
         metainfo() method.
         """
         if self.meta is None:
-            self.metainfo()
+            self.update()
 
         print('{} Features. {} Samples'.format(
             len(self.meta['features']), self.features.shape[0]))
@@ -754,7 +807,7 @@ class Dataset(object):
         :param inline: whether the output is multiple lines or inline.
         :return: the string, only when inline=True
 
-        TODO: Implement a limit of charaacters for each line that is printed
+        TODO: Implement a limit of characters for each line that is printed
               out in the screen, so that when reaching that limit '...' is
               printed.
         """
