@@ -37,7 +37,6 @@ class Dataset(object):
 
     all = None
     meta = None
-    data = None
     target = None
     features = None
     numerical = None
@@ -150,6 +149,9 @@ class Dataset(object):
         """
         Find outliers, using bonferroni criteria, from the numerical features.
         Returns a list of indices where outliers are present
+
+        # TODO Implement a simple set of methods to select from in order to
+               detect outliers.
         """
         # ols = sm.OLS(endog=self.target, exog=self.select('numerical'))
         # fit = ols.fit()
@@ -420,7 +422,8 @@ class Dataset(object):
             my_data.onehot_encode(my_data.names('categorical'))
 
         """
-        assert to_convert is not None
+        assert to_convert is not None, \
+            "You must specify the list of features to one-hot encode"
         if isinstance(to_convert, list) is not True:
             to_convert = [to_convert]
 
@@ -750,6 +753,10 @@ class Dataset(object):
         :param feature_name: the feature
         :param inline: whether the output is multiple lines or inline.
         :return: the string, only when inline=True
+
+        TODO: Implement a limit of charaacters for each line that is printed
+              out in the screen, so that when reaching that limit '...' is
+              printed.
         """
         if feature_name is None:
             return self.describe_dataset()
@@ -867,7 +874,42 @@ class Dataset(object):
         for value in categories:
             sns.distplot(self.features[feature][category_series == value],
                          hist=False, kde=True,
-                         kde_kws = {'shade': True},
+                         kde_kws={'shade': True},
                          label=str(value))
-            # self.features[feature][category_series == value].plot(
-            #     kind='density', label=str(value))
+
+    def plot_double_hist(self, feature, category=None):
+        """
+        Double histogram plot between a feature and a reference category.
+        :param feature: The name of a feature in the dataset.
+        :param category: The name of the reference category we want to
+        represent the double density plot against. If None, then the target
+        variable is used.
+        :return: None
+
+        Example:
+            # represent multiple density plots, one per unique value of the
+            # target
+            my_data.double_density(my_feature)
+
+            # represent double density plots, one per unique value of the
+            # categorical feature 'my_feature2'
+            my_data.double_density(my_feature1, my_categorical_feature2)
+        """
+        # Get the list of categories
+        if category is None or self.target.name == category:
+            categories = self.target.unique()
+            category_series = self.target
+        else:
+            assert category in list(self.categorical), \
+                '"category" must be a categorical feature'
+            categories = self.features[category].unique()
+            category_series = self.features[category]
+
+        assert feature in self.numerical, '"Feature" must be numerical.'
+        # plot a density for each value of the category
+        for value in categories:
+            sns.distplot(self.features[feature][category_series == value],
+                         hist=True, kde=False,
+                         kde_kws={'shade': True},
+                         label=str(value))
+        plt.legend(loc='best')
