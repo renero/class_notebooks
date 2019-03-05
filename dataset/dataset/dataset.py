@@ -541,8 +541,8 @@ class Dataset(object):
         self.features = self.features.drop(self.features.index[index_list])
         if self.target is not None:
             self.target = self.target.drop(self.target.index[index_list])
-        self.features = self.features.reset_index()
-        self.target = self.target.reset_index()
+        self.features.reset_index(inplace=True, drop=True)
+        self.target.reset_index(inplace=True, drop=True)
         self.update()
         return self
         
