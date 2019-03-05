@@ -451,6 +451,19 @@ class Dataset(object):
             self.update()
         return self
 
+    def add_columns(self, dataframe):
+        """
+        Add a DataFrame as a new column to the dataset.
+        Example:
+
+            my_data.add_columns(df)
+        """
+        assert isinstance(dataframe, pd.DataFrame) is True, \
+            "Argument dataframe must be a pandas DataFrame"
+        self.features = pd.concat([self.features, dataframe], axis=1)
+        self.update()
+        return self
+
     def drop_columns(self, columns_list):
         """
         Drop one or a list of columns from the dataset.
@@ -528,6 +541,8 @@ class Dataset(object):
         self.features = self.features.drop(self.features.index[index_list])
         if self.target is not None:
             self.target = self.target.drop(self.target.index[index_list])
+        self.features = self.features.reset_index()
+        self.target = self.target.reset_index()
         self.update()
         return self
         
@@ -564,6 +579,8 @@ class Dataset(object):
         """
         self.features.replace([np.inf, -np.inf], np.nan).dropna(axis=1)
         self.features.dropna()
+        self.features = self.features.reset_index()
+        self.target = self.target.reset_index()
         self.update()
         return self
         
