@@ -37,6 +37,7 @@ class Dataset(object):
 
     all = None
     meta = None
+    data = None
     target = None
     features = None
     numerical = None
@@ -77,7 +78,8 @@ class Dataset(object):
         return cls(data_location=None, data_frame=df)
         
     def numbers_to_float(self):
-        columns = self.features.select_dtypes(include=[np.number]).columns.tolist()
+        columns = self.features.select_dtypes(
+            include=[np.number]).columns.tolist()
         for column_name in columns:
             self.features[column_name] = pd.to_numeric(
                 self.features[column_name]).astype(float)
@@ -143,6 +145,7 @@ class Dataset(object):
         # Update macro access properties
         self.numerical = self.select('numerical')
         self.categorical = self.select('categorical')
+        self.data = self.features
         return self
     
     def outliers(self, n_neighbors=20):
@@ -787,7 +790,6 @@ class Dataset(object):
             body_formatted = body.format(*values_flattened)
             return header + body_formatted + trail
 
-
     def numerical_description(self, feature):
         """
         Build a dictionary with the main numerical descriptors for a feature.
@@ -914,8 +916,8 @@ class Dataset(object):
         mask[np.triu_indices_from(mask)] = True
         cmap = sns.diverging_palette(220, 10, as_cmap=True)
         sns.heatmap(corr_matrix, mask=mask, cmap=cmap, vmax=0.75, center=0,
-                    square=True, linewidths=.5, cbar_kws={"shrink": .5});
-        plt.show();
+                    square=True, linewidths=.5, cbar_kws={"shrink": .5})
+        plt.show()
         return
 
     def plot_double_density(self, feature, category=None):
