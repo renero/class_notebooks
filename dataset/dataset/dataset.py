@@ -405,6 +405,7 @@ class Dataset(object):
         :parameter to_convert: column or list of columns to be one-hot encoded.
         The only restriction is that the target variable cannot be specified
         in the list of columns and therefore, cannot be onehot encoded.
+        Default = all categorical features in dataset.
 
         Example:
 
@@ -416,16 +417,21 @@ class Dataset(object):
 
             # Encodes all categorical features in the dataset
             my_data.onehot_encode(my_data.names('categorical'))
+            or
+            my_data.onehot_encode()
 
         """
-        assert to_convert is not None, \
-            "You must specify the list of features to one-hot encode"
-        if isinstance(to_convert, list) is not True:
-            to_convert = [to_convert]
+        if to_convert is None:
+            to_encode = list(self.categorical)
+        else:
+            if isinstance(to_convert, list) is not True:
+                to_encode = [to_convert]
+            else:
+                to_encode = to_convert
 
         new_df = self.features[
-            self.features.columns.difference(to_convert)].copy()
-        for column_to_convert in to_convert:
+            self.features.columns.difference(to_encode)].copy()
+        for column_to_convert in to_encode:
             new_df = pd.concat(
                 [new_df,
                  pd.get_dummies(
@@ -592,7 +598,8 @@ class Dataset(object):
         From an input data frame, separate features from target, and
         produce splits (with or without validation).
         """
-        assert self.target is not None
+        assert self.target is not None, \
+            "The target variable must be specified before calling this method"
         
         x = pd.DataFrame(self.features, columns=self.names('features'))
         y = pd.DataFrame(self.target)
