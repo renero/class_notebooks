@@ -1,3 +1,6 @@
+"""
+This is the package dataset.
+"""
 import warnings
 
 import matplotlib.pyplot as plt
@@ -26,13 +29,15 @@ warnings.simplefilter(action='ignore')
 class Dataset(object):
     """
     This class allows a simpler representation of the dataset used
-    to build a model in class. It allows loading a remote CSV by
-    providing an URL to the initialization method of the object.
+    to build a model in class. It allows to load a remote CSV by
+    providing an URL to the initialization method of the object, and
+    work on the most common tasks related to data preparation and
+    feature engineering.::
 
-        my_data = Dataset(URL)
+        >>> my_data = Dataset(URL)
 
-        my_data = Dataset.from_dataframe(my_dataframe)
-        
+        >>> my_data = Dataset.from_dataframe(my_dataframe)
+
     """
 
     all = None
@@ -51,9 +56,10 @@ class Dataset(object):
         """
         Wrapper over the method read_csv from pandas, so you can user variadic
         arguments, as if you were using the actual read_csv
+
         :param data_location: path or url to the file
         :param data_frame: in case this method is called from the class method
-        this parameter is passing the actual dataframe to read data from
+            this parameter is passing the actual dataframe to read data from
         :param args: variadic unnamed arguments to pass to read_csv
         :param kwargs: variadic named arguments to pass to read_csv
         """
@@ -76,7 +82,7 @@ class Dataset(object):
     @classmethod
     def from_dataframe(cls, df):
         return cls(data_location=None, data_frame=df)
-        
+
     def numbers_to_float(self):
         columns = self.features.select_dtypes(
             include=[np.number]).columns.tolist()
@@ -88,13 +94,17 @@ class Dataset(object):
     def set_target(self, target_name):
         """
         Set the target variable for this dataset. This will create a new
-        property of the object called 'target' that will contain the 
+        property of the object called 'target' that will contain the
         target column of the dataset, and that column will be removed
         from the list of features.
-        Example:
-        
+
+        :param target_name: The name of the column we want to be set as the
+            target variable for this dataset.
+
+        Example::
+
             my_data.set_target('SalePrice')
-            
+
         """
         assert target_name in list(self.features), "Target name NOT recognized"
 
@@ -102,29 +112,29 @@ class Dataset(object):
         self.features.drop(target_name, axis=1, inplace=True)
         self.update()
         return self
-        
+
     def update(self):
         """
-        Builds metainfromation about the dataset, considering the 
+        Builds metainfromation about the dataset, considering the
         features that are categorical, numerical or does/doesn't contain NA's.
         """
         meta = dict()
-        
+
         # Build the subsets per data ype (list of names)
-        descr = pd.DataFrame({'dtype': self.features.dtypes, 
+        descr = pd.DataFrame({'dtype': self.features.dtypes,
                               'NAs': self.features.isna().sum()})
         categorical_features = descr.loc[descr['dtype'] == 'object'].\
             index.values.tolist()
         numerical_features = descr.loc[descr['dtype'] != 'object'].\
             index.values.tolist()
-        numerical_features_na = descr.loc[(descr['dtype'] != 'object') & 
+        numerical_features_na = descr.loc[(descr['dtype'] != 'object') &
                                           (descr['NAs'] > 0)].\
             index.values.tolist()
-        categorical_features_na = descr.loc[(descr['dtype'] == 'object') & 
+        categorical_features_na = descr.loc[(descr['dtype'] == 'object') &
                                             (descr['NAs'] > 0)].\
             index.values.tolist()
         complete_features = descr.loc[descr['NAs'] == 0].index.values.tolist()
-        
+
         # Update META-information
         meta['description'] = descr
         if self.target is not None:
@@ -147,11 +157,15 @@ class Dataset(object):
         self.categorical = self.select('categorical')
         self.data = self.features
         return self
-    
+
     def outliers(self, n_neighbors=20):
         """
-        Find outliers, using bonferroni criteria, from the numerical features.
+        Find outliers, using LOF criteria, from the numerical features.
         Returns a list of indices where outliers are present
+
+        :param n_neighbors: Number of neighbors to use by default for
+            kneighbors queries. If n_neighbors is larger than the number
+            of samples provided, all samples will be used.
 
         # TODO Implement a simple set of methods to select from in order to
                detect outliers.
@@ -166,6 +180,7 @@ class Dataset(object):
         """
         Scales numerical features in the dataset, unless the parameter 'what'
         specifies any other subset selection primitive.
+
         :param features_of_type: Subset selection primitive
         :return: the subset scaled.
         """
@@ -188,6 +203,7 @@ class Dataset(object):
         Ensures that the numerical features in the dataset, unless the
         parameter 'what' specifies any other subset selection primitive,
         fit into a normal distribution by applying the Yeo-Johnson transform
+
         :param features_of_type: Subset selection primitive
         :param return_series: Return the normalized series
         :return: the subset fitted to normal distribution.
@@ -205,10 +221,18 @@ class Dataset(object):
         self.update()
         if return_series is True:
             return self.features[self.names(features_of_type)]
-    
+
     def skewed_features(self, threshold=0.75, fix=False, return_series=False):
         """
         Returns the list of numerical features that present skewness
+
+        :param threshold: The limit over which considering that the
+            ``skew()`` return value is considered a skewed feature.
+        :param fix: (Default: False) Boolean indicating whether or not
+            fixing the skewed features. If True, those with values above the
+            threshold will be fixed using BoxCox.
+        :param return_series: (Default: False) Boolean indicating whether
+            returning the features (pandas DataFrame) that present skewness.
         :return: A pandas Series with the features and their skewness
         """
         df = self.select('numerical')
@@ -229,11 +253,12 @@ class Dataset(object):
         Return the features that are highly correlated to with other
         variables, either numerical or categorical, based on the threshold. For
         numerical variables Spearman correlation is used, for categorical
-        cramers_v
-        :param threshold: correlation limit above which features are considered
-                          highly correlated.
-        :return: the list of features that are highly correlated, and should be
-                 safe to remove.
+        cramers_v.
+
+        :param threshold: correlation limit above which features are
+            considered highly correlated.
+        :return: the list of features that are highly correlated, and
+            should be safe to remove.
         """
         corr_categoricals, _ = self.categorical_correlated(threshold)
         corr_numericals, _ = self.numerical_correlated(threshold)
@@ -242,10 +267,11 @@ class Dataset(object):
     def numerical_correlated(self, threshold=0.9):
         """
         Build a correlation matrix between all the features in data set
+
         :param threshold: Threshold beyond which considering high correlation.
-        Default is 0.9
+            Default is 0.9
         :return: The list of columns that are highly correlated and could be
-        drop out from dataset.
+            drop out from dataset.
         """
         corr_matrix = np.absolute(
             self.select('numerical').corr(method='spearman')).abs()
@@ -259,9 +285,10 @@ class Dataset(object):
     def categorical_correlated(self, threshold=0.9):
         """
         Generates a correlation matrix for the categorical variables in dataset
+
         :param threshold: Limit from which correlations is considered high.
-        :return: the list of categorical variables with HIGH correlation and
-        the correlation matrix
+        :return: The list of categorical variables with HIGH correlation and
+            the correlation matrix
         """
         columns = self.meta['categorical']
         corr = pd.DataFrame(index=columns, columns=columns)
@@ -280,14 +307,15 @@ class Dataset(object):
             np.triu(np.ones(corr.shape), k=1).astype(np.bool))
         # Find index of feature columns with correlation greater than threshold
         return [column for column in upper.columns
-                   if any(abs(upper[column]) > threshold)], corr
+                if any(abs(upper[column]) > threshold)], corr
 
     def under_represented_features(self, threshold=0.98):
         """
         Returns the list of categorical features with unrepresented categories
         or a clear unbalance between the values that can take.
+
         :param threshold: The upper limit of the most represented category
-        of the feature.
+            of the feature.
         :return: the list of features that with unrepresented categories.
         """
         under_rep = []
@@ -314,20 +342,23 @@ class Dataset(object):
         categorical type after calling this method.
 
         :parameter initial_list: list of features to start with (column names
-        of X)
-        :parameter threshold_in: include a feature if its p-value < threshold_in
+            of X)
+        :parameter threshold_in: include a feature if its
+            p-value < threshold_in
         :parameter threshold_out: exclude a feature if its
-        p-value > threshold_out
+            p-value > threshold_out
         :parameter verbose: whether to print the sequence of inclusions and
-        exclusions
-        :return: list of selected features
+            exclusions
+        :return: List of selected features
 
-        Example:
+        Example::
 
-            my_data.stepwise_selection()
+            >>> my_data.stepwise_selection()
 
-        See https://en.wikipedia.org/wiki/Stepwise_regression for the details
-        Taken from: https://datascience.stackexchange.com/a/24823
+        See <https://en.wikipedia.org/wiki/Stepwise_regression>
+        for the details
+
+        Taken from: <https://datascience.stackexchange.com/a/24823>
         """
         if initial_list is None:
             initial_list = []
@@ -373,56 +404,84 @@ class Dataset(object):
     # Methods are related to data manipulation of the pandas dataframe.
     #
 
-    def select(self, which):
+    def select(self, what):
         """
         Returns a subset of the columns of the dataset.
-        `which` specifies which subset of features to return
+        `what` specifies what subset of features to return
         If it is a list, it returns those feature names in the list,
         And if it is a keywork from: 'all', 'categorical', 'categorical_na',
         'numerical', 'numerical_na', 'complete', 'features', 'target',
         then the list of features is extracted from the metainformation
         of the dataset.
-        """
-        if isinstance(which, list):
-            return self.features.loc[:, which]
-        else:
-            assert which in self.meta_tags
-            return self.features.loc[:, self.meta[which]]
 
-    def names(self, which='all'):
+        :param what: Possible values are
+
+            * all: (Default) Include very feature, including the target
+            * numerical: Only numerical features
+            * categorical: Only categorical features
+            * complete: Only features without NA
+            * numerical_na: Numerical features with NA
+            * categorical_na: Categorical features with NA
+            * features: Only features, NOT the target variable.
+            * target: Only the target variable.
+
+        :return: Reference to the columns specified.
+        """
+        if isinstance(what, list):
+            return self.features.loc[:, what]
+        else:
+            assert what in self.meta_tags
+            return self.features.loc[:, self.meta[what]]
+
+    def names(self, what='all'):
         """
         Returns a the names of the columns of the dataset for which the arg
-        `which` is specified.
+        `what` is specified.
         If it is a list, it returns those feature names in the list,
         And if it is a keywork from: 'all', 'categorical', 'categorical_na',
         'numerical', 'numerical_na', 'complete', then the list of
         features is extracted from the metainformation of the dataset.
+
+        :param what: Possible values are
+
+            * all: (Default) Include very feature, including the target
+            * numerical: Only numerical features
+            * categorical: Only categorical features
+            * complete: Only features without NA
+            * numerical_na: Numerical features with NA
+            * categorical_na: Categorical features with NA
+            * features: Only features, NOT the target variable.
+            * target: Only the target variable.
         """
-        assert which in self.meta_tags
-        return self.meta[which]
+        assert what in self.meta_tags
+        return self.meta[what]
 
     def onehot_encode(self, to_convert=None):
         """
         Encodes the categorical features in the dataset, with OneHotEncode
 
-        :parameter to_convert: column or list of columns to be one-hot encoded.
-        The only restriction is that the target variable cannot be specified
-        in the list of columns and therefore, cannot be onehot encoded.
-        Default = all categorical features in dataset.
+        :parameter to_convert: column or list of columns to be one-hot
+            encoded.
+            The only restriction is that the target variable cannot be
+            specifiedin the list of columns and therefore, cannot be
+            onehot encoded.
+            Default = all categorical features in dataset.
+        :return: self
 
-        Example:
+        Example::
 
             # Encodes a single column named 'my_column_name'
-            my_data.onehot_encode('my_column_name')
+            >>> my_data.onehot_encode('my_column_name')
 
             # Encodes 'col1' and 'col2'
-            my_data.onehot_encode(['col1', 'col2'])
+            >>> my_data.onehot_encode(['col1', 'col2'])
 
             # Encodes all categorical features in the dataset
-            my_data.onehot_encode(my_data.names('categorical'))
-            or
-            my_data.onehot_encode()
+            >>> my_data.onehot_encode(my_data.names('categorical'))
 
+        or::
+
+            >>> my_data.onehot_encode()
         """
         if to_convert is None:
             to_encode = list(self.categorical)
@@ -450,10 +509,16 @@ class Dataset(object):
     def add_column(self, series):
         """
         Add a Series as a new column to the dataset.
-        Example:
 
-            my_data.add_column(series)
-            my_data.add_column(name=pandas.Series().values)
+        :param series: A pandas Series object with the data to be added to
+            the Dataset. It must contain a valid name not present in the
+            Dataset already.
+
+        Example::
+
+            >>> my_data.add_column(series)
+
+            >>> my_data.add_column(name=pandas.Series().values)
         """
         if series.name not in self.names('features'):
             self.features[series.name] = series.values
@@ -463,9 +528,13 @@ class Dataset(object):
     def add_columns(self, dataframe):
         """
         Add a DataFrame as a new column to the dataset.
-        Example:
 
-            my_data.add_columns(df)
+        :param dataframe: A pandas `DataFrame` object to be addedd as new
+            columns to this dataset.
+
+        Example::
+
+            >>> my_data.add_columns(df)
         """
         assert isinstance(dataframe, pd.DataFrame) is True, \
             "Argument dataframe must be a pandas DataFrame"
@@ -476,11 +545,16 @@ class Dataset(object):
     def drop_columns(self, columns_list):
         """
         Drop one or a list of columns from the dataset.
-        Example:
-        
-            my_data.drop_columns('column_name')
-            my_data.drop_columns(['column1', 'column2', 'column3'])
 
+        :param columns_list: An array-type expression with the names of the
+            columns to be removed from the Dataset. In case a single string
+            is passed, it will be considered the name of a sinle columns to
+            be dropped.
+
+        Examples::
+
+            >>> my_data.drop_columns('column_name')
+            >>> my_data.drop_columns(['column1', 'column2', 'column3'])
         """
         if isinstance(columns_list, list) is not True:
             columns_list = [columns_list]
@@ -493,10 +567,15 @@ class Dataset(object):
     def keep_columns(self, to_keep):
         """
         Keep only one or a list of columns from the dataset.
-        Example:
 
-            my_data.keep_columns('column_name')
-            my_data.keep_columns(['column1', 'column2', 'column3'])
+        :param to_keep: A string or array-like expression indicating the
+            columns to be kept in the Dataset. The columns not in the list
+            of names passed are dropped.
+
+        Example::
+
+            >>> my_data.keep_columns('column_name')
+            >>> my_data.keep_columns(['column1', 'column2', 'column3'])
         """
         if isinstance(to_keep, list) is not True:
             to_keep = [to_keep]
@@ -513,23 +592,24 @@ class Dataset(object):
         Perform an arithmetic operation on the given columns, and places the
         result on a new column, removing the original ones.
 
-        Example: if we want to sum the values of column1 and column2 into a
-        new column called 'column3', we use:
-
-            my_data.aggregate(['column1', 'column2'], 'column3', 'sum')
-
-        As a result, 'my_data' will remove 'column1' and 'column2', and the
-        operation will be the sum of the values, as it is the default operation.
-
         :param col_list: the list of columns over which the operation is done
         :param new_column: the name of the new column to be generated from the
-        operation
+            operation
         :param drop_columns: whether remove the columns used to perfrom the
-        aggregation
+            aggregation
         :param operation: the operation to be done over the column values for
-        each row. Examples: 'sum', 'diff', 'max', etc. By default, the operation
-        is the sum of the values.
-        :return: the Dataset object
+            each row. Examples: 'sum', 'diff', 'max', etc. By default, the
+            operation is the sum of the values.
+        :return: The Dataset object
+
+        Example: if we want to sum the values of column1 and column2 into a
+        new column called 'column3', we use::
+
+            >>> my_data.aggregate(['column1', 'column2'], 'column3', 'sum')
+
+        As a result, ``my_data`` will remove ``column1`` and ``column2``,
+        and the operation will be the sum of the values, as it is the default
+        operation.
         """
         assert operation in dir(type(self.features))
         for col_name in col_list:
@@ -545,7 +625,11 @@ class Dataset(object):
 
     def drop_samples(self, index_list):
         """
-        Remove the list of samples from the dataset. 
+        Remove the list of samples from the dataset.
+
+        :param index_list: The list of indices in the DataFrame to be removed
+            from the features and the target DataFrames.
+        :return: self
         """
         self.features = self.features.drop(self.features.index[index_list])
         if self.target is not None:
@@ -554,10 +638,11 @@ class Dataset(object):
         self.target.reset_index(inplace=True, drop=True)
         self.update()
         return self
-        
+
     def nas(self):
         """
         Returns the list of features that present NA entries
+
         :return: the list of feature names presenting NA
         """
         return self.names('numerical_na') + self.names('categorical_na')
@@ -566,8 +651,9 @@ class Dataset(object):
         """
         Replace any NA occurrence from the column or list of columns passed
         by the value passed as second argument.
+
         :param column: Column name or list of column names from which to
-        replace NAs with the value passes in the second argument
+            replace NAs with the value passes in the second argument
         :param value: value to be used as replacement
         :return: the object.
         """
@@ -592,18 +678,39 @@ class Dataset(object):
         self.target = self.target.reset_index()
         self.update()
         return self
-        
+
     def split(self,
-              seed=1024, 
-              test_size=0.2, 
+              seed=1024,
+              test_size=0.2,
               validation_split=False):
         """
-        From an input data frame, separate features from target, and
-        produce splits (with or without validation).
+        From an Dataset, produce splits (with or without validation) for
+        training and test. The objects of type ``Split`` will only contain
+        properties with the names ``train`` or ``test`` to reference the
+        different splits.
+
+        :param seed: The seed to be used to generate the random split.
+        :param test_size: The test size as a percentage of the base dataset.
+        :param validation_split: Boolean indicating whether it is also needed
+            to generate a third split for validation purposes, same size
+            as the test_size.
+        :return: The X and y objects that contain the splits.
+
+        Example::
+
+            # Generate the splits (80-20)
+            >>> X, y = my_data.split()
+
+            # Create an instance of the model, and use the training set to
+            # fit it, and the test set to score it.
+            >>> model = LinearRegression()
+            >>> model.fit(X.train, y.train)
+            >>> model.score(X.test, y.test)
+
         """
         assert self.target is not None, \
             "The target variable must be specified before calling this method"
-        
+
         x = pd.DataFrame(self.features, columns=self.names('features'))
         y = pd.DataFrame(self.target)
 
@@ -626,13 +733,15 @@ class Dataset(object):
     def to_numerical(self, to_convert):
         """
         Convert the specified column or columns to numbers
-        :param to_convert: column or column list to be converted
+
+        :param to_convert: column name or list of column names to be converted
         :return: object
 
         TODO: It must be possible to perform label encoding if specified.
               For example, I might want to convert a target variable with
               strings valued "Yes" and "No" to type "category" or to type
               "int" with values 1 and 0.
+
         """
         if isinstance(to_convert, list) is not True:
             to_convert = [to_convert]
@@ -650,6 +759,7 @@ class Dataset(object):
     def to_categorical(self, to_convert):
         """
         Convert the specified column or columns to categories
+
         :param to_convert: column or column list to be converted
         :return: object
         """
@@ -671,15 +781,16 @@ class Dataset(object):
         new single category. This is normally done when this list of categs
         is not enough representative.
 
-        Example:
-            my_data.merge_categories(column='color',
-                                     old_values=['grey', 'black'],
-                                     new_value='dark')
-
         :param column: The column with the categories to be merged
         :param old_values: The list of categories to be merged
         :param new_value: The resulting new category after the merge.
         :return: self.
+
+        Example::
+
+            >>> my_data.merge_categories(column='color',
+                                         old_values=['grey', 'black'],
+                                         new_value='dark')
         """
         assert column in self.categorical, "Column must be categorical"
         assert isinstance(old_values, list), \
@@ -700,15 +811,16 @@ class Dataset(object):
         new single category. This is normally done when this list of values
         is not enough representative.
 
-        Example:
-            my_data.merge_values(column='years',
-                                 old_values=['2001', '2002'],
-                                 new_value='2000')
-
         :param column: The column with the values to be merged
         :param old_values: The list of values to be merged
         :param new_value: The resulting new value after the merge.
         :return: self.
+
+        Example::
+
+            >>> my_data.merge_values(column='years',
+                                     old_values=['2001', '2002'],
+                                     new_value='2000')
         """
         assert column in self.numerical, "Column must be numerical"
         assert isinstance(old_values, list), \
@@ -730,6 +842,8 @@ class Dataset(object):
         """
         Printout the metadata information collected when calling the
         metainfo() method.
+
+        :return: nothing
         """
         if self.meta is None:
             self.update()
@@ -762,6 +876,9 @@ class Dataset(object):
     def describe_categorical(self, feature, inline=False):
         """
         Describe a categorical column by printing num classes and proportion
+        metrics.
+
+        :param feature: The catgorical feature to be described.
         :return: nothing
         """
         num_categories = feature.nunique()
@@ -785,7 +902,7 @@ class Dataset(object):
             header = '{:d} categs. '.format(num_categories)
             body = '\'{}\'({:d}, {:.4f}) ' * max_categories
             values = [(cat_names[cat], cat_counts[cat], cat_proportion[cat])
-                for cat in range(max_categories)]
+                      for cat in range(max_categories)]
             values_flattened = list(sum(values, ()))
             body_formatted = body.format(*values_flattened)
             return header + body_formatted + trail
@@ -793,8 +910,9 @@ class Dataset(object):
     def numerical_description(self, feature):
         """
         Build a dictionary with the main numerical descriptors for a feature.
+
         :param feature: The feature (column) to be analyzed
-        :return: a dictionary with the indicators and its values.
+        :return: A dictionary with the indicators and its values.
         """
         description = dict()
         description['Min.'] = np.min(feature)
@@ -808,6 +926,10 @@ class Dataset(object):
     def describe_numerical(self, feature, inline=False):
         """
         Describe a numerical column by printing min, max, med, mean, 1Q, 3Q
+
+        :param feature: The numerical feature to be described.
+        :param inline: Default False. Controls whether the description is
+            gnerated in a single line (compact) or paragraph mode.
         :return: nothing
         """
         description = self.numerical_description(feature)
@@ -829,9 +951,14 @@ class Dataset(object):
         Calls the proper feature description method, depending on whether the
         feature is numerical or categorical. If no arguments are passed, the
         description of the entire dataset is provided.
-        :param feature_name: the feature
-        :param inline: whether the output is multiple lines or inline.
-        :return: the string, only when inline=True
+
+        :param feature_name: The feature to be described. Default value is
+            None, which implies that **all** features are described.
+        :param inline: whether the output is multiple lines or inline. This
+            is used when describing from ``summary()`` function or from
+            a console or cell.
+        :return: The string, only when inline=True, that contains the
+            description.
 
         TODO: Implement a limit of characters for each line that is printed
               out in the screen, so that when reaching that limit '...' is
@@ -858,8 +985,18 @@ class Dataset(object):
     def summary(self, what='all'):
         """
         Printout a summary of each feature.
-        :type what: the list of columns to be summarized: all, numerical,
-        categorical, etc.
+
+        :param what: Possible values are
+
+            * all: (Default) Include very feature, including the target
+            * numerical: Only numerical features
+            * categorical: Only categorical features
+            * complete: Only features without NA
+            * numerical_na: Numerical features with NA
+            * categorical_na: Categorical features with NA
+            * features: Only features, NOT the target variable.
+            * target: Only the target variable.
+
         :return: N/A
         """
         assert what in self.meta_tags
@@ -879,14 +1016,28 @@ class Dataset(object):
                 self.describe(feature_name, inline=True)))
         return
 
-    def table(self, which='all', max_width=80):
+    def table(self, what='all', max_width=80):
         """
         Print a tabulated version of the list of elements in a list, using
         a max_width display (default 80).
-        """
-        assert which in self.meta_tags
 
-        f_list = self.names(which)
+        :param what: Possible values are
+
+            * all: (Default) Include very feature, including the target
+            * numerical: Only numerical features
+            * categorical: Only categorical features
+            * complete: Only features without NA
+            * numerical_na: Numerical features with NA
+            * categorical_na: Categorical features with NA
+            * features: Only features, NOT the target variable.
+            * target: Only the target variable.
+
+        :param max_width: The max_width used in the display.
+        :return: None
+        """
+        assert what in self.meta_tags
+
+        f_list = self.names(what)
         if len(f_list) == 0:
             return
 
@@ -923,20 +1074,22 @@ class Dataset(object):
     def plot_double_density(self, feature, category=None):
         """
         Double density plot between a feature and a reference category.
+
         :param feature: The name of a feature in the dataset.
         :param category: The name of the reference category we want to
-        represent the double density plot against. If None, then the target
-        variable is used.
+            represent the double density plot against. If None, then the
+            target variable is used.
         :return: None
 
-        Example:
+        Example::
+
             # represent multiple density plots, one per unique value of the
             # target
-            my_data.double_density(my_feature)
+            >>> my_data.plot_double_density(my_feature)
 
             # represent double density plots, one per unique value of the
             # categorical feature 'my_feature2'
-            my_data.double_density(my_feature1, my_categorical_feature2)
+            >>> my_data.plot_double_density(my_feature1, my_feature2)
         """
         # Get the list of categories
         if category is None or self.target.name == category:
@@ -959,20 +1112,22 @@ class Dataset(object):
     def plot_double_hist(self, feature, category=None):
         """
         Double histogram plot between a feature and a reference category.
+
         :param feature: The name of a feature in the dataset.
         :param category: The name of the reference category we want to
-        represent the double density plot against. If None, then the target
-        variable is used.
+            represent the double density plot against. If None, then the
+            target variable is used.
         :return: None
 
-        Example:
+        Example::
+
             # represent multiple density plots, one per unique value of the
             # target
-            my_data.double_density(my_feature)
+            >>> my_data.plot_double_hist(my_feature)
 
             # represent double density plots, one per unique value of the
             # categorical feature 'my_feature2'
-            my_data.double_density(my_feature1, my_categorical_feature2)
+            >>> my_data.double_hist(my_feature1, my_feature2)
         """
         # Get the list of categories
         if category is None or self.target.name == category:

@@ -31,7 +31,7 @@ def convert(data, to):
     else:
         raise ValueError("Unknown data conversion: {}".format(to))
     if converted is None:
-        raise TypeError('cannot handle data conversion of type: {} to {}'.format(type(data),to))
+        raise TypeError('cannot handle data conversion of type: {} to {}'.format(type(data), to))
     else:
         return converted
 
@@ -40,7 +40,7 @@ def conditional_entropy(x, y):
     """
     Calculates the conditional entropy of x given y: S(x|y)
 
-    Wikipedia: https://en.wikipedia.org/wiki/Conditional_entropy
+    Wikipedia: <https://en.wikipedia.org/wiki/Conditional_entropy>
 
     :param x: list / NumPy ndarray / Pandas Series
         A sequence of measurements
@@ -50,7 +50,7 @@ def conditional_entropy(x, y):
     """
     # entropy of x given y
     y_counter = Counter(y)
-    xy_counter = Counter(list(zip(x,y)))
+    xy_counter = Counter(list(zip(x, y)))
     total_occurrences = sum(y_counter.values())
     entropy = 0.0
     for xy in xy_counter.keys():
@@ -63,11 +63,12 @@ def conditional_entropy(x, y):
 def cramers_v(x, y):
     """
     Calculates Cramer's V statistic for categorical-categorical association.
-    Uses correction from Bergsma and Wicher, Journal of the Korean Statistical Society 42 (2013): 323-328.
+    Uses correction from Bergsma and Wicher, Journal of the Korean
+    Statistical Society 42 (2013): 323-328.
     This is a symmetric coefficient: V(x,y) = V(y,x)
 
     Original function taken from: https://stackoverflow.com/a/46498792/5863503
-    Wikipedia: https://en.wikipedia.org/wiki/Cram%C3%A9r%27s_V
+    Wikipedia: <https://en.wikipedia.org/wiki/Cram%C3%A9r%27s_V>
 
     :param x: list / NumPy ndarray / Pandas Series
         A sequence of categorical measurements
@@ -89,12 +90,14 @@ def cramers_v(x, y):
 
 def theils_u(x, y):
     """
-    Calculates Theil's U statistic (Uncertainty coefficient) for categorical-categorical association.
-    This is the uncertainty of x given y: value is on the range of [0,1] - where 0 means y provides no information about
+    Calculates Theil's U statistic (Uncertainty coefficient) for
+    categorical-categorical association.
+    This is the uncertainty of x given y: value is on the range of
+    [0,1] - where 0 means y provides no information about
     x, and 1 means y provides full information about x.
     This is an asymmetric coefficient: U(x,y) != U(y,x)
 
-    Wikipedia: https://en.wikipedia.org/wiki/Uncertainty_coefficient
+    Wikipedia: <https://en.wikipedia.org/wiki/Uncertainty_coefficient>
 
     :param x: list / NumPy ndarray / Pandas Series
         A sequence of categorical measurements
@@ -103,7 +106,7 @@ def theils_u(x, y):
     :return: float
         in the range of [0,1]
     """
-    s_xy = conditional_entropy(x,y)
+    s_xy = conditional_entropy(x, y)
     x_counter = Counter(x)
     total_occurrences = sum(x_counter.values())
     p_x = list(map(lambda n: n/total_occurrences, x_counter.values()))
@@ -114,13 +117,15 @@ def theils_u(x, y):
         return (s_x - s_xy) / s_x
 
 
-
 def correlation_ratio(categories, measurements):
     """
-    Calculates the Correlation Ratio (sometimes marked by the greek letter Eta) for categorical-continuous association.
-    Answers the question - given a continuous value of a measurement, is it possible to know which category is it
+    Calculates the Correlation Ratio (sometimes marked by the greek
+    letter Eta) for categorical-continuous association.
+    Answers the question - given a continuous value of a measurement,
+    is it possible to know which category is it
     associated with?
-    Value is in the range [0,1], where 0 means a category cannot be determined by a continuous measurement, and 1 means
+    Value is in the range [0,1], where 0 means a category cannot be
+    determined by a continuous measurement, and 1 means
     a category can be determined with absolute certainty.
 
     Wikipedia: https://en.wikipedia.org/wiki/Correlation_ratio
@@ -138,13 +143,14 @@ def correlation_ratio(categories, measurements):
     cat_num = np.max(fcat)+1
     y_avg_array = np.zeros(cat_num)
     n_array = np.zeros(cat_num)
-    for i in range(0,cat_num):
+    for i in range(0, cat_num):
         cat_measures = measurements[np.argwhere(fcat == i).flatten()]
         n_array[i] = len(cat_measures)
         y_avg_array[i] = np.average(cat_measures)
-    y_total_avg = np.sum(np.multiply(y_avg_array,n_array))/np.sum(n_array)
-    numerator = np.sum(np.multiply(n_array,np.power(np.subtract(y_avg_array,y_total_avg),2)))
-    denominator = np.sum(np.power(np.subtract(measurements,y_total_avg),2))
+    y_total_avg = np.sum(np.multiply(y_avg_array, n_array))/np.sum(n_array)
+    numerator = np.sum(np.multiply(n_array, np.power(np.subtract(
+        y_avg_array, y_total_avg), 2)))
+    denominator = np.sum(np.power(np.subtract(measurements, y_total_avg), 2))
     if numerator == 0:
         eta = 0.0
     else:
