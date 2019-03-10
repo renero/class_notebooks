@@ -1147,3 +1147,52 @@ class Dataset(object):
                          kde_kws={'shade': True},
                          label=str(value))
         plt.legend(loc='best')
+
+    def plot_against_target(self, columns_list, bins=50):
+        """
+        Plots a histogram of all (or a specific) feature along with target
+        variable (stacked bar chart)
+
+        :param columns_list: Feature, or list of features to plot
+        :param bins: Number of bins for the histogram
+        :return: None
+
+        Example:
+
+            >>> my_data.plot_against_target('column_name')
+            >>> my_data.plot_against_target(['column1', 'column2', 'column3'])
+
+        """
+        assert self.names('target') is not None, \
+            "Please set the target variable first"
+        target_name = self.names('target')
+
+        if isinstance(columns_list, list) is not True:
+            columns_list = [columns_list]
+
+        plt.rcParams["figure.figsize"] = (15, 15)
+
+        for i, column in enumerate(columns_list):
+            if column in self.names('features') and \
+                    column in self.names('numerical'):
+                # Prepare series
+                data = self.select([column, target_name]).copy()
+                data = pd.concat([self.select([column]), self.target], axis=1)
+                x = data.loc[data[target_name] == 0][column]
+                y = data.loc[data[target_name] == 1][column]
+
+                # calculate number of bins
+                unique = len(np.unique(data))
+                number_of_bins = unique if unique <= bins else bins
+
+                # Plot arrangement
+                plt.subplot(len(columns_list), 1,i+1)
+
+                # Plot
+                plt.hist([x,y], bins=number_of_bins, stacked=True)
+
+                # Add labels
+                plt.title('Histogram of ' + column)
+                plt.legend([target_name + ': 0', target_name + ': 1'])
+                plt.xlabel(column)
+                plt.ylabel('count')
