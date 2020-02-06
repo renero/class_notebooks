@@ -11,3 +11,11 @@ If you want to use it, I recommend to install via pip with a link to the source,
     $ git clone https://github.com/renero/dataset
     $ cd dataset
     $ pip install -e .
+    
+or maybe, install it directly from git
+
+    $ pip install git+http://github.com/renero/dataset
+
+Once installed, import it from you python code, normally:
+
+    $ from dataset import Dataset
