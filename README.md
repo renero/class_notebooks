@@ -34,3 +34,22 @@ The extension called `hide_code` is installed:
     jupyter serverextension enable --py hide_code
 
 And then you simply have to convert the notebook, using `--to hide_code_html`, `--to hide_code_pdf` or `--to hide_code_latexpdf`.
+
+## Build the slides (hiding some code cells)
+
+To get slides showing only the code you want to show, I found a snippet of code from Damian Avila, which has been placed in this folder, called `hide_code_in_slideshow.py`.
+
+To hide some code cells in the presentation, BUT keeping the output, simply, load the `.py` at the beginning of the notebook:
+
+    %run hide_code_in_slideshow.py
+    
+and then, in those cells you don't want the code to be visible, include a call to the method at the beginning of the cell:
+
+    hide_code_in_slideshow()
+    whatever_goes_here()
+    ...
+    
+And it will work when you will run the command:
+
+    jupyter nbconvert --to slides my_notebook.ipynb --post serve
+    
