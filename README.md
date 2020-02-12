@@ -11,7 +11,7 @@ If you want to use it, I recommend to install via pip with a link to the source,
     $ git clone https://github.com/renero/dataset
     $ cd dataset
     $ pip install -e .
-    
+
 or maybe, install it directly from git
 
     $ pip install git+http://github.com/renero/dataset
@@ -19,3 +19,18 @@ or maybe, install it directly from git
 Once installed, import it from you python code, normally:
 
     $ from dataset import Dataset
+
+## Building the PDF/LaTeX versions of the notebooks
+
+I've finally used the extension described in [URL](https://dev.to/alephthoughts/publication-ready-jupyter-notebooks-47ca) to be able to hide some of the code cells.
+
+    $ jupyter nbconvert --to hide_code_pdf Notebook.ipynb
+
+The extension called `hide_code` is installed:
+
+    pip install hide_code
+    jupyter nbextension install --py hide_code
+    jupyter nbextension enable --py hide_code
+    jupyter serverextension enable --py hide_code
+
+And then you simply have to convert the notebook, using `--to hide_code_html`, `--to hide_code_pdf` or `--to hide_code_latexpdf`.
