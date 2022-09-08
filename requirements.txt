@@ -1,4 +1,5 @@
 atlas
+category_encoders
 dtreeviz
 featuretools
 folium
