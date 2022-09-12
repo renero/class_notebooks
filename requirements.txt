@@ -3,6 +3,7 @@ category_encoders
 dtreeviz
 featuretools
 folium
+gplearn
 graphviz
 imgaug<0.2.7
 ipympl
@@ -20,6 +21,7 @@ scipy
 seaborn
 setuptools
 sklearn_pandas
+skrebate
 statsmodels
 tabulate
 treeinterpreter
