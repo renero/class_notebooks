@@ -1,0 +1,6 @@
+  "rise": {
+    "auto_select": "code",
+    "scroll": true,
+    "theme": "white",
+    "transition": "slide"
+  }
